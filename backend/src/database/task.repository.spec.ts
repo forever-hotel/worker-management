@@ -3,7 +3,7 @@ import { DatabaseService } from './database.service';
 import { TaskRepository } from './task.repository';
 
 describe('TaskRepository', () => {
-  it('should return rows from wkms_tasks', async () => {
+  it('should return only unassigned tasks ordered by submission time', async () => {
     const mockDatabaseService = {
       query: jest.fn().mockResolvedValue({
         rows: [],
@@ -15,8 +15,15 @@ describe('TaskRepository', () => {
     const result = await repository.findAll();
 
     expect(mockDatabaseService.query).toHaveBeenCalledWith(
-      expect.stringContaining('FROM wkms_tasks'),
+      expect.stringContaining('WHERE status = $1'),
+      ['UNASSIGNED'],
     );
+
+    expect(mockDatabaseService.query).toHaveBeenCalledWith(
+      expect.stringContaining('ORDER BY submitted_at ASC'),
+      ['UNASSIGNED'],
+    );
+
     expect(result).toEqual([]);
   });
 });
