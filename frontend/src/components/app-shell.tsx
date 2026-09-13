@@ -8,19 +8,27 @@ type AppSection = "queue" | "my-tasks" | "shift";
 type AppShellProps = {
     title: string;
     activeTab: AppSection;
+    queueCount?: number;
+    myTasksCount?: number;
     children: ReactNode;
 };
 
 export function AppShell({
                              title,
                              activeTab,
+                             queueCount,
+                             myTasksCount,
                              children,
                          }: AppShellProps) {
     return (
         <div className="min-h-dvh bg-wkms-page">
             <div className="sticky top-0 z-40">
                 <AppHeader title={title} />
-                <TopTabs activeTab={activeTab} />
+                <TopTabs
+                    activeTab={activeTab}
+                    queueCount={queueCount}
+                    myTasksCount={myTasksCount}
+                />
             </div>
 
             <main className="w-full px-4 pb-24 pt-4">

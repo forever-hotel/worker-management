@@ -1,0 +1,48 @@
+import type { Task } from "@/types/task";
+
+export const mockTasks: Task[] = [
+    {
+        id: "REQ-0042",
+        roomNumber: "204",
+        category: "MAINTENANCE",
+        description: "Air conditioner is not cooling the room properly.",
+        priority: "HIGH",
+        status: "ESCALATED",
+        source: "GUEST_APP",
+        submittedAt: "10:18 AM",
+        elapsedMinutes: 18,
+    },
+    {
+        id: "REQ-0045",
+        roomNumber: "101",
+        category: "ROOM_CLEANING",
+        description: "Room requires cleaning and fresh linen.",
+        priority: "HIGH",
+        status: "UNASSIGNED",
+        source: "FRONT_DESK",
+        submittedAt: "10:32 AM",
+        elapsedMinutes: 4,
+    },
+    {
+        id: "REQ-0047",
+        roomNumber: "312",
+        category: "EXTRA_TOWELS",
+        description: "Guest requested two additional bath towels.",
+        priority: "NORMAL",
+        status: "UNASSIGNED",
+        source: "GUEST_APP",
+        submittedAt: "10:29 AM",
+        elapsedMinutes: 7,
+    },
+    {
+        id: "DEL-0031",
+        roomNumber: "408",
+        category: "FOOD_DELIVERY",
+        description: "Food order is ready for delivery from the kitchen.",
+        priority: "NORMAL",
+        status: "UNASSIGNED",
+        source: "KMS",
+        submittedAt: "10:35 AM",
+        elapsedMinutes: 1,
+    },
+];
