@@ -12,7 +12,7 @@ type SignInFormValues = {
 export default function SignInPage() {
     const router = useRouter();
 
-    const handleSubmit = (_values: SignInFormValues) => {
+    const handleSubmit = () => {
         // Temporary frontend-only navigation.
         // Real authentication will be connected through the shared API Gateway later.
         router.push("/queue");
@@ -47,7 +47,6 @@ export default function SignInPage() {
                 </div>
 
                 {/* Sign-in content */}
-                {/* Sign-in content */}
                 <div className="relative flex min-h-full flex-col px-5 py-8 sm:px-8 md:px-10 lg:px-16 xl:px-24">
                     <div className="flex flex-1 items-start sm:items-center">
                         <div className="mx-auto w-full max-w-md">
@@ -60,8 +59,8 @@ export default function SignInPage() {
                                     name="username"
                                     label={
                                         <span className="text-xs font-semibold tracking-[0.12em] text-slate-600">
-              USERNAME
-            </span>
+                                          USERNAME
+                                        </span>
                                     }
                                     rules={[
                                         {
@@ -82,8 +81,8 @@ export default function SignInPage() {
                                     name="password"
                                     label={
                                         <span className="text-xs font-semibold tracking-[0.12em] text-slate-600">
-              PASSWORD
-            </span>
+                                          PASSWORD
+                                        </span>
                                     }
                                     rules={[
                                         {

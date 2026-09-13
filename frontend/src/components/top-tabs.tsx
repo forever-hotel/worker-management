@@ -6,6 +6,8 @@ type TabKey = "queue" | "my-tasks" | "shift";
 
 type TopTabsProps = {
     activeTab: TabKey;
+    queueCount?: number;
+    myTasksCount?: number;
 };
 
 const tabs = [
@@ -26,7 +28,11 @@ const tabs = [
     },
 ];
 
-export function TopTabs({ activeTab }: TopTabsProps) {
+export function TopTabs({
+    activeTab,
+    queueCount,
+    myTasksCount,
+}: TopTabsProps) {
     return (
         <nav
             className="grid grid-cols-3 bg-wkms-navy px-3"
@@ -34,6 +40,13 @@ export function TopTabs({ activeTab }: TopTabsProps) {
         >
             {tabs.map((tab) => {
                 const isActive = tab.key === activeTab;
+
+                const count =
+                    tab.key === "queue"
+                        ? queueCount
+                        : tab.key === "my-tasks"
+                            ? myTasksCount
+                            : undefined;
 
                 return (
                     <Link
@@ -46,7 +59,10 @@ export function TopTabs({ activeTab }: TopTabsProps) {
                                 : "font-medium text-[#ffffff]/60",
                         ].join(" ")}
                     >
-                        {tab.label}
+                        <span>
+                          {tab.label}
+                          {count !== undefined && ` (${count})`}
+                        </span>
 
                         {isActive && (
                             <span
