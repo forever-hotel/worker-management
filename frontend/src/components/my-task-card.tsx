@@ -2,6 +2,7 @@ import Image from "next/image";
 import { Button, Tag } from "antd";
 import type { MyTask } from "@/types/my-task";
 import { taskCategoryImages } from "@/lib/task-images";
+import {useRouter} from "next/navigation";
 
 type MyTaskCardProps = {
     task: MyTask;
@@ -30,8 +31,25 @@ export function MyTaskCard({
 
     const imageSrc = taskCategoryImages[task.category];
 
+    const router = useRouter();
+
+    const openTaskDetail = () => {
+        router.push(`/tasks/${task.id}`);
+    };
+
     return (
-        <article className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+        <article
+            role="link"
+            tabIndex={0}
+            onClick={openTaskDetail}
+            onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openTaskDetail();
+                }
+            }}
+            className="cursor-pointer rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:shadow-md sm:p-4"
+        >
             {/* Top row */}
             <div className="flex items-center justify-between gap-3">
                 <span className="text-xs font-medium text-slate-600">
@@ -106,7 +124,10 @@ export function MyTaskCard({
                             size="small"
                             className="min-h-9 w-full font-semibold shadow-none sm:min-h-10"
                             style={{ boxShadow: "none" }}
-                            onClick={() => onStart?.(task.id)}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                onStart?.(task.id);
+                            }}
                         >
                             In Progress
                         </Button>
@@ -116,7 +137,10 @@ export function MyTaskCard({
                             size="small"
                             className="min-h-9 w-full font-semibold shadow-none sm:min-h-10"
                             style={{ boxShadow: "none" }}
-                            onClick={() => onComplete?.(task.id)}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                onComplete?.(task.id);
+                            }}
                         >
                             {isDelivery ? "Mark Delivered" : "Mark Complete"}
                         </Button>
@@ -128,7 +152,10 @@ export function MyTaskCard({
                         block
                         className="min-h-9 font-semibold shadow-none sm:min-h-10"
                         style={{ boxShadow: "none" }}
-                        onClick={() => onComplete?.(task.id)}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onComplete?.(task.id);
+                        }}
                     >
                         {isDelivery ? "Mark Delivered" : "Mark Complete"}
                     </Button>
