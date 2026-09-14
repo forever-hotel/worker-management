@@ -2,6 +2,7 @@ import Image from "next/image";
 import { Tag } from "antd";
 import type { MyTask } from "@/types/my-task";
 import { taskCategoryImages } from "@/lib/task-images";
+import {useRouter} from "next/navigation";
 
 type CompletedTaskCardProps = {
     task: MyTask;
@@ -23,8 +24,25 @@ export function CompletedTaskCard({
     const imageSrc = taskCategoryImages[task.category];
     const isHighPriority = task.priority === "HIGH";
 
+    const router = useRouter();
+
+    const openTaskDetail = () => {
+        router.push(`/tasks/${task.id}`);
+    };
+
     return (
-        <article className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+        <article
+            role="link"
+            tabIndex={0}
+            onClick={openTaskDetail}
+            onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openTaskDetail();
+                }
+            }}
+            className="relative cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:shadow-md sm:p-4"
+        >
              <div
                 className="pointer-events-none absolute inset-0 bg-emerald-50/30"
                 aria-hidden="true"

@@ -2,6 +2,7 @@ import Image from "next/image";
 import { Button, Tag } from "antd";
 import type { Task } from "@/types/task";
 import {taskCategoryImages} from "@/lib/task-images";
+import { useRouter } from "next/navigation";
 
 type TaskCardProps = {
     task: Task;
@@ -23,10 +24,25 @@ export function TaskCard({ task }: TaskCardProps) {
     const isDelivery = task.category === "FOOD_DELIVERY";
     const imageSrc = task.image ?? taskCategoryImages[task.category];
 
+    const router = useRouter();
+
+    const openTaskDetail = () => {
+        router.push(`/tasks/${task.id}`);
+    };
+
     return (
         <article
+            role="link"
+            tabIndex={0}
+            onClick={openTaskDetail}
+            onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openTaskDetail();
+                }
+            }}
             className={[
-                "rounded-xl border bg-white p-3 shadow-sm sm:p-4",
+                "cursor-pointer rounded-xl border bg-white p-3 shadow-sm transition hover:shadow-md sm:p-4",
                 isEscalated
                     ? "border-amber-400 bg-amber-50/60"
                     : "border-slate-200",
@@ -105,6 +121,9 @@ export function TaskCard({ task }: TaskCardProps) {
                     size="small"
                     className="min-h-9 min-w-28 font-semibold sm:min-h-10 sm:min-w-32"
                     style={{ boxShadow: "none" }}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                    }}
                 >
                     Claim Task
                 </Button>
