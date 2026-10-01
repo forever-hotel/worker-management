@@ -66,7 +66,9 @@ describe('TaskController integration', () => {
             _res: Response,
             next: NextFunction,
         ) => {
-          const workerId = req.header('x-test-worker-id');
+          const workerId = req.header(
+              'x-test-worker-id',
+          );
 
           if (workerId) {
             req.user = {
@@ -90,18 +92,18 @@ describe('TaskController integration', () => {
     await app.close();
   });
 
-  it('should return 200 with an empty task queue', async () => {
+  it('should return 200 with an empty task queue through the WKMS gateway path', async () => {
     await request(app.getHttpServer())
-        .get('/tasks/queue')
+        .get('/wkms/tasks/queue')
         .expect(200)
         .expect([]);
 
     expect(findAll).toHaveBeenCalledTimes(1);
   });
 
-  it('should claim a task for an authenticated worker', async () => {
+  it('should claim a task for an authenticated worker through the WKMS gateway path', async () => {
     await request(app.getHttpServer())
-        .post('/tasks/task-1/claim')
+        .post('/wkms/tasks/task-1/claim')
         .set('x-test-worker-id', 'worker-1')
         .expect(201)
         .expect({
@@ -118,7 +120,7 @@ describe('TaskController integration', () => {
 
   it('should return 401 when worker identity is missing', async () => {
     await request(app.getHttpServer())
-        .post('/tasks/task-1/claim')
+        .post('/wkms/tasks/task-1/claim')
         .expect(401);
 
     expect(claimTask).not.toHaveBeenCalled();
@@ -126,7 +128,7 @@ describe('TaskController integration', () => {
 
   it('should return 409 when the active task limit is reached', async () => {
     await request(app.getHttpServer())
-        .post('/tasks/limit-task/claim')
+        .post('/wkms/tasks/limit-task/claim')
         .set('x-test-worker-id', 'worker-1')
         .expect(409);
 
