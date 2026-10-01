@@ -3,8 +3,8 @@ import { pathsToModuleNameMapper } from 'ts-jest';
 import ts from 'typescript';
 
 const { config: tsconfig } = ts.readConfigFile(
-  './tsconfig.json',
-  ts.sys.readFile,
+    './tsconfig.json',
+    ts.sys.readFile,
 );
 
 const paths = tsconfig?.compilerOptions?.paths ?? {};
@@ -43,6 +43,15 @@ const config: Config = {
   ],
 
   coverageDirectory: './coverage',
+
+  coverageReporters: ['text', 'lcov', 'html'],
+
+  coverageThreshold: {
+    global: {
+      branches: 80,
+      lines: 80,
+    },
+  },
 
   testEnvironment: 'node',
 };
