@@ -3,7 +3,7 @@ import type { DatabaseService } from '../database.service';
 import { ServiceRequestRepository } from './service-request.repository';
 
 describe('ServiceRequestRepository', () => {
-  it('should return rows from wkms_service_requests', async () => {
+  it('should return rows from foss_service_requests', async () => {
     const queryMock = jest
         .fn<
             (
@@ -26,7 +26,7 @@ describe('ServiceRequestRepository', () => {
     const result = await repository.findAll();
 
     expect(queryMock).toHaveBeenCalledWith(
-        expect.stringContaining('FROM wkms_service_requests'),
+        expect.stringContaining('FROM foss_service_requests'),
     );
 
     expect(result).toEqual([]);

@@ -7,9 +7,9 @@ export class ServiceRequestRepository {
 
   async findAll() {
     const result = await this.databaseService.query(
-      `SELECT *
-       FROM wkms_service_requests
-       ORDER BY submitted_at ASC`,
+        `SELECT *
+         FROM foss_service_requests
+         ORDER BY submitted_at ASC`,
     );
 
     return result.rows;
