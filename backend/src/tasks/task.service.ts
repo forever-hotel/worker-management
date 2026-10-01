@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { TaskRepository } from '../database/task.repository';
+import { TaskRepository } from '../database/repositories/task.repository';
 
 @Injectable()
 export class TaskService {

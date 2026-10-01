@@ -3,7 +3,7 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
-import { TaskRepository } from '../database/task.repository';
+import { TaskRepository } from '../database/repositories/task.repository';
 import { TaskService } from './task.service';
 
 describe('TaskService', () => {

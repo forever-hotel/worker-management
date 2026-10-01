@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
-import { AntdRegistry } from "@ant-design/nextjs-registry";
 import "./globals.css";
-import {AntdProvider} from "@/components/antd-provider";
+import {AppProviders} from "@/providers/app-providers";
 
 const geistSans = Geist({
     subsets: ["latin"],
@@ -17,9 +16,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     return (
         <html lang="en">
         <body className={geistSans.className}>
-        <AntdRegistry>
-            <AntdProvider>{children}</AntdProvider>
-        </AntdRegistry>
+        <AppProviders>{children}</AppProviders>
         </body>
         </html>
     );
