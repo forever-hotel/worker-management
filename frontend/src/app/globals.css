@@ -1,33 +1,5 @@
 @import "tailwindcss";
-
-:root {
-  --background: #f5f3ef;
-  --foreground: #12263a;
-
-  --wkms-status-bar: #12263a;
-  --wkms-navy: #1a3c5e;
-  --wkms-page: #f5f3ef;
-  --wkms-white: #ffffff;
-  --wkms-soft-blue: #e8eef4;
-  --wkms-gold: #c9920d;
-  --wkms-green: #1a6b3c;
-  --wkms-border: #d0d8cf;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-
-  --color-wkms-status-bar: var(--wkms-status-bar);
-  --color-wkms-navy: var(--wkms-navy);
-  --color-wkms-page: var(--wkms-page);
-  --color-wkms-white: var(--wkms-white);
-  --color-wkms-soft-blue: var(--wkms-soft-blue);
-  --color-wkms-gold: var(--wkms-gold);
-  --color-wkms-green: var(--wkms-green);
-  --color-wkms-border: var(--wkms-border);
-
-}
+@import "../styles/tokens.css";
 
 * {
   box-sizing: border-box;

@@ -1,7 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { DatabaseService } from './database.service';
-import { TaskRepository } from './task.repository';
-import { ServiceRequestRepository } from './service-request.repository';
+import { TaskRepository } from './repositories/task.repository';
+import { ServiceRequestRepository } from './repositories/service-request.repository';
 
 @Global()
 @Module({
