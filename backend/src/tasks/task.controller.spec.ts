@@ -3,17 +3,28 @@ import { UnauthorizedException } from '@nestjs/common';
 import { TaskService } from './task.service';
 import { TaskController } from './task.controller';
 
+type GetQueueMock = () => Promise<unknown[]>;
+
+type ClaimTaskMock = (
+    taskId: string,
+    workerId: string,
+) => Promise<unknown>;
+
 describe('TaskController', () => {
   it('should return the task queue', async () => {
+    const getQueue = jest
+        .fn<GetQueueMock>()
+        .mockResolvedValue([]);
+
     const mockTaskService = {
-      getQueue: jest.fn().mockResolvedValue([]),
+      getQueue,
     } as unknown as TaskService;
 
     const controller = new TaskController(mockTaskService);
 
     const result = await controller.getQueue();
 
-    expect(mockTaskService.getQueue).toHaveBeenCalled();
+    expect(getQueue).toHaveBeenCalled();
     expect(result).toEqual([]);
   });
 
@@ -24,8 +35,12 @@ describe('TaskController', () => {
       assigned_worker_id: 'worker-1',
     };
 
+    const claimTask = jest
+        .fn<ClaimTaskMock>()
+        .mockResolvedValue(claimedTask);
+
     const mockTaskService = {
-      claimTask: jest.fn().mockResolvedValue(claimedTask),
+      claimTask,
     } as unknown as TaskService;
 
     const controller = new TaskController(mockTaskService);
@@ -37,32 +52,35 @@ describe('TaskController', () => {
     } as Parameters<TaskController['claimTask']>[1];
 
     const result = await controller.claimTask(
-      'task-1',
-      request,
+        'task-1',
+        request,
     );
 
-    expect(mockTaskService.claimTask).toHaveBeenCalledWith(
-      'task-1',
-      'worker-1',
+    expect(claimTask).toHaveBeenCalledWith(
+        'task-1',
+        'worker-1',
     );
+
     expect(result).toEqual(claimedTask);
   });
 
   it('should reject a claim without an authenticated worker identity', async () => {
+    const claimTask = jest.fn<ClaimTaskMock>();
+
     const mockTaskService = {
-      claimTask: jest.fn(),
+      claimTask,
     } as unknown as TaskService;
 
     const controller = new TaskController(mockTaskService);
 
     const request = {} as Parameters<
-      TaskController['claimTask']
+        TaskController['claimTask']
     >[1];
 
     await expect(
-      controller.claimTask('task-1', request),
+        controller.claimTask('task-1', request),
     ).rejects.toBeInstanceOf(UnauthorizedException);
 
-    expect(mockTaskService.claimTask).not.toHaveBeenCalled();
+    expect(claimTask).not.toHaveBeenCalled();
   });
 });

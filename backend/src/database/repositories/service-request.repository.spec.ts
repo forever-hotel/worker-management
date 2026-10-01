@@ -4,19 +4,31 @@ import { ServiceRequestRepository } from './service-request.repository';
 
 describe('ServiceRequestRepository', () => {
   it('should return rows from wkms_service_requests', async () => {
+    const queryMock = jest
+        .fn<
+            (
+                text: string,
+                params?: unknown[],
+            ) => Promise<{ rows: unknown[] }>
+        >()
+        .mockResolvedValue({
+          rows: [],
+        });
+
     const mockDatabaseService = {
-      query: jest.fn().mockResolvedValue({
-        rows: [],
-      }),
+      query: queryMock,
     } as unknown as DatabaseService;
 
-    const repository = new ServiceRequestRepository(mockDatabaseService);
+    const repository = new ServiceRequestRepository(
+        mockDatabaseService,
+    );
 
     const result = await repository.findAll();
 
-    expect(mockDatabaseService.query).toHaveBeenCalledWith(
-      expect.stringContaining('FROM wkms_service_requests'),
+    expect(queryMock).toHaveBeenCalledWith(
+        expect.stringContaining('FROM wkms_service_requests'),
     );
+
     expect(result).toEqual([]);
   });
 });
