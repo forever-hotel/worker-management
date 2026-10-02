@@ -1,6 +1,6 @@
 import { jest } from '@jest/globals';
 import {
-  ConflictException,
+  ConflictException, ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { TaskRepository } from '../database/repositories/task.repository';
@@ -9,6 +9,20 @@ import { TaskService } from './task.service';
 type FindAllMock = () => Promise<unknown[]>;
 
 type ClaimTaskMock = (
+    taskId: string,
+    workerId: string,
+) => Promise<unknown>;
+
+type FindMyActiveTasksMock = (
+    workerId: string,
+) => Promise<unknown[]>;
+
+type StartTaskMock = (
+    taskId: string,
+    workerId: string,
+) => Promise<unknown>;
+
+type CompleteTaskMock = (
     taskId: string,
     workerId: string,
 ) => Promise<unknown>;
@@ -152,4 +166,288 @@ describe('TaskService', () => {
         service.claimTask('task-1', 'worker-1'),
     ).rejects.toBe(unexpectedValue);
   });
+
+  it('should return active tasks for the authenticated worker', async () => {
+    const tasks = [
+      {
+        task_id: 'task-1',
+        status: 'ASSIGNED',
+        assigned_worker_id:
+            'worker-1',
+      },
+    ];
+
+    const findMyActiveTasks = jest
+        .fn<FindMyActiveTasksMock>()
+        .mockResolvedValue(tasks);
+
+    const service = new TaskService({
+      findMyActiveTasks,
+    } as unknown as TaskRepository);
+
+    const result =
+        await service.getMyTasks(
+            'worker-1',
+        );
+
+    expect(
+        findMyActiveTasks,
+    ).toHaveBeenCalledWith(
+        'worker-1',
+    );
+
+    expect(result).toEqual(tasks);
+  });
+
+  it('should start an assigned task successfully', async () => {
+    const startedTask = {
+      task_id: 'task-1',
+      status: 'IN_PROGRESS',
+      assigned_worker_id:
+          'worker-1',
+    };
+
+    const startTask = jest
+        .fn<StartTaskMock>()
+        .mockResolvedValue(
+            startedTask,
+        );
+
+    const service = new TaskService({
+      startTask,
+    } as unknown as TaskRepository);
+
+    const result =
+        await service.startTask(
+            'task-1',
+            'worker-1',
+        );
+
+    expect(startTask).toHaveBeenCalledWith(
+        'task-1',
+        'worker-1',
+    );
+
+    expect(result).toEqual(
+        startedTask,
+    );
+  });
+
+  it('should complete an in-progress task successfully', async () => {
+    const completedTask = {
+      task_id: 'task-1',
+      status: 'COMPLETED',
+      assigned_worker_id:
+          'worker-1',
+      completed_at:
+          '2026-10-02T12:00:00.000Z',
+    };
+
+    const completeTask = jest
+        .fn<CompleteTaskMock>()
+        .mockResolvedValue(
+            completedTask,
+        );
+
+    const service = new TaskService({
+      completeTask,
+    } as unknown as TaskRepository);
+
+    const result =
+        await service.completeTask(
+            'task-1',
+            'worker-1',
+        );
+
+    expect(
+        completeTask,
+    ).toHaveBeenCalledWith(
+        'task-1',
+        'worker-1',
+    );
+
+    expect(result).toEqual(
+        completedTask,
+    );
+  });
+
+  it('should return not found when starting a missing task', async () => {
+    const startTask = jest
+        .fn<StartTaskMock>()
+        .mockRejectedValue(
+            new Error(
+                'TASK_NOT_FOUND',
+            ),
+        );
+
+    const service = new TaskService({
+      startTask,
+    } as unknown as TaskRepository);
+
+    await expect(
+        service.startTask(
+            'task-1',
+            'worker-1',
+        ),
+    ).rejects.toBeInstanceOf(
+        NotFoundException,
+    );
+  });
+
+  it('should return forbidden when starting another worker task', async () => {
+    const startTask = jest
+        .fn<StartTaskMock>()
+        .mockRejectedValue(
+            new Error(
+                'TASK_NOT_OWNED',
+            ),
+        );
+
+    const service = new TaskService({
+      startTask,
+    } as unknown as TaskRepository);
+
+    await expect(
+        service.startTask(
+            'task-1',
+            'worker-1',
+        ),
+    ).rejects.toBeInstanceOf(
+        ForbiddenException,
+    );
+  });
+
+  it('should return conflict when starting from an invalid status', async () => {
+    const startTask = jest
+        .fn<StartTaskMock>()
+        .mockRejectedValue(
+            new Error(
+                'INVALID_TASK_STATUS',
+            ),
+        );
+
+    const service = new TaskService({
+      startTask,
+    } as unknown as TaskRepository);
+
+    await expect(
+        service.startTask(
+            'task-1',
+            'worker-1',
+        ),
+    ).rejects.toBeInstanceOf(
+        ConflictException,
+    );
+  });
+
+  it('should return not found when completing a missing task', async () => {
+    const completeTask = jest
+        .fn<CompleteTaskMock>()
+        .mockRejectedValue(
+            new Error(
+                'TASK_NOT_FOUND',
+            ),
+        );
+
+    const service = new TaskService({
+      completeTask,
+    } as unknown as TaskRepository);
+
+    await expect(
+        service.completeTask(
+            'task-1',
+            'worker-1',
+        ),
+    ).rejects.toBeInstanceOf(
+        NotFoundException,
+    );
+  });
+
+  it('should return forbidden when completing another worker task', async () => {
+    const completeTask = jest
+        .fn<CompleteTaskMock>()
+        .mockRejectedValue(
+            new Error(
+                'TASK_NOT_OWNED',
+            ),
+        );
+
+    const service = new TaskService({
+      completeTask,
+    } as unknown as TaskRepository);
+
+    await expect(
+        service.completeTask(
+            'task-1',
+            'worker-1',
+        ),
+    ).rejects.toBeInstanceOf(
+        ForbiddenException,
+    );
+  });
+
+  it('should return conflict when completing from an invalid status', async () => {
+    const completeTask = jest
+        .fn<CompleteTaskMock>()
+        .mockRejectedValue(
+            new Error(
+                'INVALID_TASK_STATUS',
+            ),
+        );
+
+    const service = new TaskService({
+      completeTask,
+    } as unknown as TaskRepository);
+
+    await expect(
+        service.completeTask(
+            'task-1',
+            'worker-1',
+        ),
+    ).rejects.toBeInstanceOf(
+        ConflictException,
+    );
+  });
+
+  it('should rethrow an unexpected lifecycle error', async () => {
+    const error =
+        new Error('DATABASE_FAILURE');
+
+    const startTask = jest
+        .fn<StartTaskMock>()
+        .mockRejectedValue(error);
+
+    const service = new TaskService({
+      startTask,
+    } as unknown as TaskRepository);
+
+    await expect(
+        service.startTask(
+            'task-1',
+            'worker-1',
+        ),
+    ).rejects.toBe(error);
+  });
+
+  it('should rethrow a non-Error lifecycle rejection', async () => {
+    const startTask = jest
+        .fn<StartTaskMock>()
+        .mockRejectedValue(
+            'UNKNOWN_FAILURE',
+        );
+
+    const service = new TaskService({
+      startTask,
+    } as unknown as TaskRepository);
+
+    await expect(
+        service.startTask(
+            'task-1',
+            'worker-1',
+        ),
+    ).rejects.toBe(
+        'UNKNOWN_FAILURE',
+    );
+  });
+
 });
