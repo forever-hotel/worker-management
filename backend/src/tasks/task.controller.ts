@@ -3,21 +3,24 @@ import {
   Get,
   Param,
   Post,
-  Req,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
-import { Request } from 'express';
+import { CurrentWorker } from '../auth/decorators/current-worker.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { WorkerRoleGuard } from '../auth/guards/worker-role.guard';
+import type { AuthenticatedWorker } from '../auth/types/authenticated-worker';
 import { TaskService } from './task.service';
 
-interface AuthenticatedRequest extends Request {
-  user?: {
-    worker_id: string;
-  };
-}
-
 @Controller('wkms/tasks')
+@UseGuards(
+    JwtAuthGuard,
+    WorkerRoleGuard,
+)
 export class TaskController {
-  constructor(private readonly taskService: TaskService) {}
+  constructor(
+      private readonly taskService: TaskService,
+  ) {}
 
   @Get('queue')
   async getQueue() {
@@ -27,16 +30,18 @@ export class TaskController {
   @Post(':taskId/claim')
   async claimTask(
       @Param('taskId') taskId: string,
-      @Req() request: AuthenticatedRequest,
+      @CurrentWorker()
+      worker: AuthenticatedWorker | undefined,
   ) {
-    const workerId = request.user?.worker_id;
-
-    if (!workerId) {
+    if (!worker) {
       throw new UnauthorizedException(
           'Authenticated worker identity is required',
       );
     }
 
-    return this.taskService.claimTask(taskId, workerId);
+    return this.taskService.claimTask(
+        taskId,
+        worker.worker_id,
+    );
   }
 }
