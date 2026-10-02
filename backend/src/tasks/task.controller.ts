@@ -15,7 +15,7 @@ interface AuthenticatedRequest extends Request {
   };
 }
 
-@Controller('tasks')
+@Controller('wkms/tasks')
 export class TaskController {
   constructor(private readonly taskService: TaskService) {}
 
@@ -26,14 +26,14 @@ export class TaskController {
 
   @Post(':taskId/claim')
   async claimTask(
-    @Param('taskId') taskId: string,
-    @Req() request: AuthenticatedRequest,
+      @Param('taskId') taskId: string,
+      @Req() request: AuthenticatedRequest,
   ) {
     const workerId = request.user?.worker_id;
 
     if (!workerId) {
       throw new UnauthorizedException(
-        'Authenticated worker identity is required',
+          'Authenticated worker identity is required',
       );
     }
 
