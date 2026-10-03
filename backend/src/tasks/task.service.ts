@@ -22,6 +22,48 @@ export class TaskService {
     );
   }
 
+  async getTaskDetail(
+      taskId: string,
+      workerId: string,
+  ) {
+    const task =
+        await this.taskRepository.findById(
+            taskId,
+        );
+
+    if (!task) {
+      throw new NotFoundException(
+          'Task not found',
+      );
+    }
+
+    const isAvailableTask =
+        task.assigned_worker_id == null &&
+        (
+            task.status === 'UNASSIGNED' ||
+            task.status === 'ESCALATED'
+        );
+
+    const isOwnedTask =
+        task.assigned_worker_id === workerId &&
+        (
+            task.status === 'ASSIGNED' ||
+            task.status === 'IN_PROGRESS' ||
+            task.status === 'COMPLETED'
+        );
+
+    if (
+        !isAvailableTask &&
+        !isOwnedTask
+    ) {
+      throw new ForbiddenException(
+          'Task is not available to the authenticated worker',
+      );
+    }
+
+    return task;
+  }
+
   async claimTask(
       taskId: string,
       workerId: string,

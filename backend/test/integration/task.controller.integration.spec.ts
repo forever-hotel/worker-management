@@ -15,6 +15,12 @@ type FindMyActiveTasksMock = (
     workerId: string,
 ) => Promise<unknown[]>;
 
+type FindByIdMock = (
+    taskId: string,
+) => Promise<
+    Record<string, unknown> | null
+>;
+
 type TaskActionMock = (
     taskId: string,
     workerId: string,
@@ -32,6 +38,9 @@ describe('TaskController integration', () => {
 
   const findMyActiveTasks =
       jest.fn<FindMyActiveTasksMock>();
+
+  const findById =
+      jest.fn<FindByIdMock>();
 
   const claimTask =
       jest.fn<TaskActionMock>();
@@ -65,6 +74,7 @@ describe('TaskController integration', () => {
               useValue: {
                 findAll,
                 findMyActiveTasks,
+                findById,
                 claimTask,
                 startTask,
                 completeTask,
@@ -85,6 +95,7 @@ describe('TaskController integration', () => {
   beforeEach(() => {
     findAll.mockReset();
     findMyActiveTasks.mockReset();
+    findById.mockReset();
     claimTask.mockReset();
     startTask.mockReset();
     completeTask.mockReset();
@@ -100,6 +111,54 @@ describe('TaskController integration', () => {
             workerId,
           },
         ],
+    );
+
+    findById.mockImplementation(
+        async (taskId: string) => {
+          if (taskId === 'missing-task') {
+            return null;
+          }
+
+          if (taskId === 'other-worker-task') {
+            return {
+              task_id: taskId,
+              room_number: 'DEMO101',
+              category: 'ROOM_CLEANING',
+              status: 'ASSIGNED',
+              assigned_worker_id:
+                  'worker-2',
+            };
+          }
+
+          if (taskId === 'available-task') {
+            return {
+              task_id: taskId,
+              room_number: 'DEMO101',
+              category: 'ROOM_CLEANING',
+              status: 'UNASSIGNED',
+              assigned_worker_id: null,
+            };
+          }
+
+          if (taskId === 'owned-task') {
+            return {
+              task_id: taskId,
+              room_number: 'DEMO101',
+              category: 'ROOM_CLEANING',
+              status: 'ASSIGNED',
+              assigned_worker_id:
+                  'trusted-worker-1',
+            };
+          }
+
+          return {
+            task_id: taskId,
+            room_number: 'DEMO101',
+            category: 'ROOM_CLEANING',
+            status: 'UNASSIGNED',
+            assigned_worker_id: null,
+          };
+        },
     );
 
     claimTask.mockImplementation(
@@ -292,6 +351,127 @@ describe('TaskController integration', () => {
     expect(
         findMyActiveTasks,
     ).not.toHaveBeenCalled();
+  });
+
+
+  it('should return an available task detail for an authenticated worker', async () => {
+    const token =
+        createWorkerToken(
+            'trusted-worker-1',
+        );
+
+    await request(app.getHttpServer())
+        .get(
+            '/wkms/tasks/available-task',
+        )
+        .set(
+            'Authorization',
+            `Bearer ${token}`,
+        )
+        .expect(200)
+        .expect({
+          task_id: 'available-task',
+          room_number: 'DEMO101',
+          category: 'ROOM_CLEANING',
+          status: 'UNASSIGNED',
+          assigned_worker_id: null,
+        });
+
+    expect(findById)
+        .toHaveBeenCalledWith(
+            'available-task',
+        );
+  });
+
+  it('should return an owned task detail for the authenticated worker', async () => {
+    const token =
+        createWorkerToken(
+            'trusted-worker-1',
+        );
+
+    await request(app.getHttpServer())
+        .get(
+            '/wkms/tasks/owned-task',
+        )
+        .set(
+            'Authorization',
+            `Bearer ${token}`,
+        )
+        .expect(200)
+        .expect({
+          task_id: 'owned-task',
+          room_number: 'DEMO101',
+          category: 'ROOM_CLEANING',
+          status: 'ASSIGNED',
+          assigned_worker_id:
+              'trusted-worker-1',
+        });
+
+    expect(findById)
+        .toHaveBeenCalledWith(
+            'owned-task',
+        );
+  });
+
+  it('should reject task detail assigned to another worker', async () => {
+    const token =
+        createWorkerToken(
+            'trusted-worker-1',
+        );
+
+    await request(app.getHttpServer())
+        .get(
+            '/wkms/tasks/other-worker-task',
+        )
+        .set(
+            'Authorization',
+            `Bearer ${token}`,
+        )
+        .expect(403);
+  });
+
+  it('should return 404 when task detail does not exist', async () => {
+    const token =
+        createWorkerToken();
+
+    await request(app.getHttpServer())
+        .get(
+            '/wkms/tasks/missing-task',
+        )
+        .set(
+            'Authorization',
+            `Bearer ${token}`,
+        )
+        .expect(404);
+  });
+
+  it('should reject task detail without authentication', async () => {
+    await request(app.getHttpServer())
+        .get(
+            '/wkms/tasks/available-task',
+        )
+        .expect(401);
+
+    expect(findById)
+        .not.toHaveBeenCalled();
+  });
+
+  it('should reject task detail for a non-worker role', async () => {
+    const token =
+        createManagerToken();
+
+    await request(app.getHttpServer())
+        .get(
+            '/wkms/tasks/available-task',
+        )
+        .set(
+            'Authorization',
+            `Bearer ${token}`,
+        )
+        .expect(403);
+
+    expect(findById)
+        .not.toHaveBeenCalled();
   });
 
   it('should claim using the trusted JWT worker identity', async () => {

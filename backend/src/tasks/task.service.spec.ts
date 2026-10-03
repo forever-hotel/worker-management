@@ -27,6 +27,12 @@ type CompleteTaskMock = (
     workerId: string,
 ) => Promise<unknown>;
 
+type FindByIdMock = (
+    taskId: string,
+) => Promise<
+    Record<string, unknown> | null
+>;
+
 describe('TaskService', () => {
   it('should return the task queue from the repository', async () => {
     const findAll = jest
@@ -447,6 +453,225 @@ describe('TaskService', () => {
         ),
     ).rejects.toBe(
         'UNKNOWN_FAILURE',
+    );
+  });
+
+  it('should return an unassigned task detail', async () => {
+    const task = {
+      task_id: 'task-1',
+      status: 'UNASSIGNED',
+      assigned_worker_id: null,
+    };
+
+    const findById = jest
+        .fn<FindByIdMock>()
+        .mockResolvedValue(task);
+
+    const service = new TaskService({
+      findById,
+    } as unknown as TaskRepository);
+
+    const result =
+        await service.getTaskDetail(
+            'task-1',
+            'worker-1',
+        );
+
+    expect(findById).toHaveBeenCalledWith(
+        'task-1',
+    );
+
+    expect(result).toEqual(task);
+  });
+
+  it('should return an escalated unassigned task detail', async () => {
+    const task = {
+      task_id: 'task-1',
+      status: 'ESCALATED',
+      assigned_worker_id: null,
+    };
+
+    const findById = jest
+        .fn<FindByIdMock>()
+        .mockResolvedValue(task);
+
+    const service = new TaskService({
+      findById,
+    } as unknown as TaskRepository);
+
+    const result =
+        await service.getTaskDetail(
+            'task-1',
+            'worker-1',
+        );
+
+    expect(result).toEqual(task);
+  });
+
+  it('should return an assigned task owned by the worker', async () => {
+    const task = {
+      task_id: 'task-1',
+      status: 'ASSIGNED',
+      assigned_worker_id:
+          'worker-1',
+    };
+
+    const findById = jest
+        .fn<FindByIdMock>()
+        .mockResolvedValue(task);
+
+    const service = new TaskService({
+      findById,
+    } as unknown as TaskRepository);
+
+    const result =
+        await service.getTaskDetail(
+            'task-1',
+            'worker-1',
+        );
+
+    expect(result).toEqual(task);
+  });
+
+  it('should return an in-progress task owned by the worker', async () => {
+    const task = {
+      task_id: 'task-1',
+      status: 'IN_PROGRESS',
+      assigned_worker_id:
+          'worker-1',
+    };
+
+    const findById = jest
+        .fn<FindByIdMock>()
+        .mockResolvedValue(task);
+
+    const service = new TaskService({
+      findById,
+    } as unknown as TaskRepository);
+
+    const result =
+        await service.getTaskDetail(
+            'task-1',
+            'worker-1',
+        );
+
+    expect(result).toEqual(task);
+  });
+
+  it('should return a completed task owned by the worker', async () => {
+    const task = {
+      task_id: 'task-1',
+      status: 'COMPLETED',
+      assigned_worker_id:
+          'worker-1',
+      completed_at:
+          '2026-10-03T01:00:00.000Z',
+    };
+
+    const findById = jest
+        .fn<FindByIdMock>()
+        .mockResolvedValue(task);
+
+    const service = new TaskService({
+      findById,
+    } as unknown as TaskRepository);
+
+    const result =
+        await service.getTaskDetail(
+            'task-1',
+            'worker-1',
+        );
+
+    expect(result).toEqual(task);
+  });
+
+  it('should return not found when task detail does not exist', async () => {
+    const findById = jest
+        .fn<FindByIdMock>()
+        .mockResolvedValue(null);
+
+    const service = new TaskService({
+      findById,
+    } as unknown as TaskRepository);
+
+    await expect(
+        service.getTaskDetail(
+            'missing-task',
+            'worker-1',
+        ),
+    ).rejects.toBeInstanceOf(
+        NotFoundException,
+    );
+  });
+
+  it('should reject task detail assigned to another worker', async () => {
+    const findById = jest
+        .fn<FindByIdMock>()
+        .mockResolvedValue({
+          task_id: 'task-1',
+          status: 'ASSIGNED',
+          assigned_worker_id:
+              'worker-2',
+        });
+
+    const service = new TaskService({
+      findById,
+    } as unknown as TaskRepository);
+
+    await expect(
+        service.getTaskDetail(
+            'task-1',
+            'worker-1',
+        ),
+    ).rejects.toBeInstanceOf(
+        ForbiddenException,
+    );
+  });
+
+  it('should reject an invalid unowned task state', async () => {
+    const findById = jest
+        .fn<FindByIdMock>()
+        .mockResolvedValue({
+          task_id: 'task-1',
+          status: 'COMPLETED',
+          assigned_worker_id: null,
+        });
+
+    const service = new TaskService({
+      findById,
+    } as unknown as TaskRepository);
+
+    await expect(
+        service.getTaskDetail(
+            'task-1',
+            'worker-1',
+        ),
+    ).rejects.toBeInstanceOf(
+        ForbiddenException,
+    );
+  });
+
+  it('should reject an unexpected owned task state', async () => {
+    const findById = jest
+        .fn<FindByIdMock>()
+        .mockResolvedValue({
+          task_id: 'task-1',
+          status: 'ESCALATED',
+          assigned_worker_id:
+              'worker-1',
+        });
+
+    const service = new TaskService({
+      findById,
+    } as unknown as TaskRepository);
+
+    await expect(
+        service.getTaskDetail(
+            'task-1',
+            'worker-1',
+        ),
+    ).rejects.toBeInstanceOf(
+        ForbiddenException,
     );
   });
 

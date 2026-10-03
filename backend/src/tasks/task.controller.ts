@@ -40,6 +40,21 @@ export class TaskController {
     );
   }
 
+  @Get(':taskId')
+  async getTaskDetail(
+      @Param('taskId') taskId: string,
+      @CurrentWorker()
+      worker: AuthenticatedWorker | undefined,
+  ) {
+    const authenticatedWorker =
+        this.requireWorker(worker);
+
+    return this.taskService.getTaskDetail(
+        taskId,
+        authenticatedWorker.worker_id,
+    );
+  }
+
   @Post(':taskId/claim')
   async claimTask(
       @Param('taskId') taskId: string,
