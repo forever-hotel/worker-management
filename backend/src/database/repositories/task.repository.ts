@@ -1,6 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database.service';
 
+export type CompletedTaskSummaryRecord = {
+    task_id: string;
+    room_number: string;
+    category: string;
+    priority: string;
+    submitted_at: Date | string;
+    completed_at: Date | string;
+};
+
 @Injectable()
 export class TaskRepository {
   constructor(private readonly databaseService: DatabaseService) {}
@@ -61,6 +70,83 @@ export class TaskRepository {
                 'UNASSIGNED',
             ],
         );
+
+        return result.rows;
+    }
+
+    async countActiveTasks(
+        workerId: string,
+    ): Promise<number> {
+        const result =
+            await this.databaseService.query<{
+                count: number;
+            }>(
+                `SELECT COUNT(*)::int AS count
+           FROM wkms_tasks
+           WHERE assigned_worker_id = $1
+             AND status IN ($2, $3)`,
+                [
+                    workerId,
+                    'ASSIGNED',
+                    'IN_PROGRESS',
+                ],
+            );
+
+        return Number(
+            result.rows[0]?.count ?? 0,
+        );
+    }
+
+    async countAvailableEscalatedTasks():
+        Promise<number> {
+        const result =
+            await this.databaseService.query<{
+                count: number;
+            }>(
+                `SELECT COUNT(*)::int AS count
+           FROM wkms_tasks
+           WHERE status = $1
+             AND assigned_worker_id IS NULL`,
+                [
+                    'ESCALATED',
+                ],
+            );
+
+        return Number(
+            result.rows[0]?.count ?? 0,
+        );
+    }
+
+    async findCompletedTasksForWindow(
+        workerId: string,
+        startAt: Date,
+        endAt: Date,
+    ): Promise<
+        CompletedTaskSummaryRecord[]
+    > {
+        const result =
+            await this.databaseService
+                .query<CompletedTaskSummaryRecord>(
+                    `SELECT
+                   task_id,
+                   room_number,
+                   category,
+                   priority,
+                   submitted_at,
+                   completed_at
+               FROM wkms_tasks
+               WHERE assigned_worker_id = $1
+                 AND status = $2
+                 AND completed_at >= $3
+                 AND completed_at < $4
+               ORDER BY completed_at DESC`,
+                    [
+                        workerId,
+                        'COMPLETED',
+                        startAt,
+                        endAt,
+                    ],
+                );
 
         return result.rows;
     }

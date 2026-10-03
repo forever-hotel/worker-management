@@ -9,6 +9,7 @@ import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
 import { TaskModule } from './tasks/task.module';
 import {ScheduleModule} from "@nestjs/schedule";
+import {ShiftModule} from "./shift/shift.module";
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import {ScheduleModule} from "@nestjs/schedule";
     AuthModule,
     HealthModule,
     TaskModule,
+    ShiftModule,
   ],
   controllers: [AppController],
   providers: [AppService],
