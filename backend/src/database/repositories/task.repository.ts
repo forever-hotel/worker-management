@@ -5,17 +5,20 @@ import { DatabaseService } from '../database.service';
 export class TaskRepository {
   constructor(private readonly databaseService: DatabaseService) {}
 
-  async findAll() {
-    const result = await this.databaseService.query(
-        `SELECT *
-         FROM wkms_tasks
-         WHERE status = $1
-         ORDER BY submitted_at ASC`,
-        ['UNASSIGNED'],
-    );
+    async findAll() {
+        const result = await this.databaseService.query(
+            `SELECT *
+             FROM wkms_tasks
+             WHERE status IN ($1, $2)
+             ORDER BY submitted_at ASC`,
+            [
+                'UNASSIGNED',
+                'ESCALATED',
+            ],
+        );
 
-    return result.rows;
-  }
+        return result.rows;
+    }
 
   async findMyActiveTasks(workerId: string) {
     const result = await this.databaseService.query(
@@ -43,6 +46,23 @@ export class TaskRepository {
         );
 
         return result.rows[0] ?? null;
+    }
+
+    async escalateOverdueTasks() {
+        const result = await this.databaseService.query(
+            `UPDATE wkms_tasks
+       SET status = $1,
+           updated_at = NOW()
+       WHERE status = $2
+         AND submitted_at <= NOW() - INTERVAL '15 minutes'
+       RETURNING *`,
+            [
+                'ESCALATED',
+                'UNASSIGNED',
+            ],
+        );
+
+        return result.rows;
     }
 
   async claimTask(taskId: string, workerId: string) {
@@ -93,9 +113,15 @@ export class TaskRepository {
         throw new Error('TASK_NOT_FOUND');
       }
 
-      if (taskResult.rows[0].status !== 'UNASSIGNED') {
-        throw new Error('TASK_NOT_AVAILABLE');
-      }
+        const taskStatus =
+            taskResult.rows[0].status;
+
+        if (
+            taskStatus !== 'UNASSIGNED' &&
+            taskStatus !== 'ESCALATED'
+        ) {
+            throw new Error('TASK_NOT_AVAILABLE');
+        }
 
       const updateResult = await client.query(
           `UPDATE wkms_tasks

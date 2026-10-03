@@ -474,6 +474,78 @@ describe('TaskController integration', () => {
         .not.toHaveBeenCalled();
   });
 
+    it('should return escalated tasks in the available queue', async () => {
+        const token =
+            createWorkerToken();
+
+        findAll.mockResolvedValueOnce([
+            {
+                task_id: 'task-1',
+                status: 'UNASSIGNED',
+                assigned_worker_id: null,
+            },
+            {
+                task_id: 'task-2',
+                status: 'ESCALATED',
+                assigned_worker_id: null,
+            },
+        ]);
+
+        await request(app.getHttpServer())
+            .get('/wkms/tasks/queue')
+            .set(
+                'Authorization',
+                `Bearer ${token}`,
+            )
+            .expect(200)
+            .expect([
+                {
+                    task_id: 'task-1',
+                    status: 'UNASSIGNED',
+                    assigned_worker_id: null,
+                },
+                {
+                    task_id: 'task-2',
+                    status: 'ESCALATED',
+                    assigned_worker_id: null,
+                },
+            ]);
+
+        expect(findAll)
+            .toHaveBeenCalledTimes(1);
+    });
+
+    it('should allow an authenticated worker to claim an escalated task', async () => {
+        const token =
+            createWorkerToken(
+                'trusted-worker-1',
+            );
+
+        await request(app.getHttpServer())
+            .post(
+                '/wkms/tasks/escalated-task/claim',
+            )
+            .set(
+                'Authorization',
+                `Bearer ${token}`,
+            )
+            .expect(201)
+            .expect({
+                task_id:
+                    'escalated-task',
+                status:
+                    'ASSIGNED',
+                assigned_worker_id:
+                    'trusted-worker-1',
+            });
+
+        expect(claimTask)
+            .toHaveBeenCalledWith(
+                'escalated-task',
+                'trusted-worker-1',
+            );
+    });
+
   it('should claim using the trusted JWT worker identity', async () => {
     const token =
         createWorkerToken(
