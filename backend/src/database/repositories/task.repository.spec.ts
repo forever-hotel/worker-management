@@ -224,4 +224,336 @@ describe('TaskRepository', () => {
 
     expect(query).toHaveBeenCalledTimes(3);
   });
+
+  it('should return only active tasks assigned to the worker', async () => {
+    const tasks = [
+      {
+        task_id: 'task-1',
+        status: 'ASSIGNED',
+        assigned_worker_id: 'worker-1',
+      },
+      {
+        task_id: 'task-2',
+        status: 'IN_PROGRESS',
+        assigned_worker_id: 'worker-1',
+      },
+    ];
+
+    const queryMock = jest
+        .fn<
+            (
+                text: string,
+                params?: unknown[],
+            ) => Promise<{ rows: unknown[] }>
+        >()
+        .mockResolvedValue({
+          rows: tasks,
+        });
+
+    const mockDatabaseService = {
+      query: queryMock,
+    } as unknown as DatabaseService;
+
+    const repository =
+        new TaskRepository(
+            mockDatabaseService,
+        );
+
+    const result =
+        await repository.findMyActiveTasks(
+            'worker-1',
+        );
+
+    expect(queryMock).toHaveBeenCalledWith(
+        expect.stringContaining(
+            'assigned_worker_id = $1',
+        ),
+        [
+          'worker-1',
+          'ASSIGNED',
+          'IN_PROGRESS',
+        ],
+    );
+
+    expect(result).toEqual(tasks);
+  });
+
+  it('should start an assigned task owned by the worker', async () => {
+    const { query, client } =
+        createMockClient();
+
+    query
+        .mockResolvedValueOnce({
+          rowCount: 1,
+          rows: [
+            {
+              task_id: 'task-1',
+              status: 'ASSIGNED',
+              assigned_worker_id:
+                  'worker-1',
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rowCount: 1,
+          rows: [
+            {
+              task_id: 'task-1',
+              status: 'IN_PROGRESS',
+              assigned_worker_id:
+                  'worker-1',
+            },
+          ],
+        });
+
+    const repository =
+        new TaskRepository(
+            createDatabaseService(client),
+        );
+
+    const result =
+        await repository.startTask(
+            'task-1',
+            'worker-1',
+        );
+
+    expect(result).toMatchObject({
+      task_id: 'task-1',
+      status: 'IN_PROGRESS',
+      assigned_worker_id:
+          'worker-1',
+    });
+
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  it('should reject starting a task owned by another worker', async () => {
+    const { query, client } =
+        createMockClient();
+
+    query.mockResolvedValueOnce({
+      rowCount: 1,
+      rows: [
+        {
+          task_id: 'task-1',
+          status: 'ASSIGNED',
+          assigned_worker_id:
+              'worker-2',
+        },
+      ],
+    });
+
+    const repository =
+        new TaskRepository(
+            createDatabaseService(client),
+        );
+
+    await expect(
+        repository.startTask(
+            'task-1',
+            'worker-1',
+        ),
+    ).rejects.toThrow(
+        'TASK_NOT_OWNED',
+    );
+
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it('should reject starting a task that is not ASSIGNED', async () => {
+    const { query, client } =
+        createMockClient();
+
+    query.mockResolvedValueOnce({
+      rowCount: 1,
+      rows: [
+        {
+          task_id: 'task-1',
+          status: 'IN_PROGRESS',
+          assigned_worker_id:
+              'worker-1',
+        },
+      ],
+    });
+
+    const repository =
+        new TaskRepository(
+            createDatabaseService(client),
+        );
+
+    await expect(
+        repository.startTask(
+            'task-1',
+            'worker-1',
+        ),
+    ).rejects.toThrow(
+        'INVALID_TASK_STATUS',
+    );
+  });
+
+  it('should complete an IN_PROGRESS task owned by the worker', async () => {
+    const { query, client } =
+        createMockClient();
+
+    query
+        .mockResolvedValueOnce({
+          rowCount: 1,
+          rows: [
+            {
+              task_id: 'task-1',
+              status: 'IN_PROGRESS',
+              assigned_worker_id:
+                  'worker-1',
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rowCount: 1,
+          rows: [
+            {
+              task_id: 'task-1',
+              status: 'COMPLETED',
+              assigned_worker_id:
+                  'worker-1',
+              completed_at:
+                  '2026-10-02T12:00:00.000Z',
+            },
+          ],
+        });
+
+    const repository =
+        new TaskRepository(
+            createDatabaseService(client),
+        );
+
+    const result =
+        await repository.completeTask(
+            'task-1',
+            'worker-1',
+        );
+
+    expect(result).toMatchObject({
+      task_id: 'task-1',
+      status: 'COMPLETED',
+      assigned_worker_id:
+          'worker-1',
+    });
+
+    expect(result).toHaveProperty(
+        'completed_at',
+    );
+
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  it('should reject completing a task owned by another worker', async () => {
+    const { query, client } =
+        createMockClient();
+
+    query.mockResolvedValueOnce({
+      rowCount: 1,
+      rows: [
+        {
+          task_id: 'task-1',
+          status: 'IN_PROGRESS',
+          assigned_worker_id:
+              'worker-2',
+        },
+      ],
+    });
+
+    const repository =
+        new TaskRepository(
+            createDatabaseService(client),
+        );
+
+    await expect(
+        repository.completeTask(
+            'task-1',
+            'worker-1',
+        ),
+    ).rejects.toThrow(
+        'TASK_NOT_OWNED',
+    );
+  });
+
+  it('should reject completing a task that is not IN_PROGRESS', async () => {
+    const { query, client } =
+        createMockClient();
+
+    query.mockResolvedValueOnce({
+      rowCount: 1,
+      rows: [
+        {
+          task_id: 'task-1',
+          status: 'ASSIGNED',
+          assigned_worker_id:
+              'worker-1',
+        },
+      ],
+    });
+
+    const repository =
+        new TaskRepository(
+            createDatabaseService(client),
+        );
+
+    await expect(
+        repository.completeTask(
+            'task-1',
+            'worker-1',
+        ),
+    ).rejects.toThrow(
+        'INVALID_TASK_STATUS',
+    );
+  });
+
+  it('should reject starting a task that does not exist', async () => {
+    const { query, client } =
+        createMockClient();
+
+    query.mockResolvedValueOnce({
+      rowCount: 0,
+      rows: [],
+    });
+
+    const repository =
+        new TaskRepository(
+            createDatabaseService(client),
+        );
+
+    await expect(
+        repository.startTask(
+            'missing-task',
+            'worker-1',
+        ),
+    ).rejects.toThrow(
+        'TASK_NOT_FOUND',
+    );
+  });
+
+  it('should reject completing a task that does not exist', async () => {
+    const { query, client } =
+        createMockClient();
+
+    query.mockResolvedValueOnce({
+      rowCount: 0,
+      rows: [],
+    });
+
+    const repository =
+        new TaskRepository(
+            createDatabaseService(client),
+        );
+
+    await expect(
+        repository.completeTask(
+            'missing-task',
+            'worker-1',
+        ),
+    ).rejects.toThrow(
+        'TASK_NOT_FOUND',
+    );
+  });
+
 });

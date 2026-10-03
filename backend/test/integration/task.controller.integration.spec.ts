@@ -11,7 +11,11 @@ import { TaskService } from '../../src/tasks/task.service';
 
 type FindAllMock = () => Promise<unknown[]>;
 
-type ClaimTaskMock = (
+type FindMyActiveTasksMock = (
+    workerId: string,
+) => Promise<unknown[]>;
+
+type TaskActionMock = (
     taskId: string,
     workerId: string,
 ) => Promise<unknown>;
@@ -26,8 +30,17 @@ describe('TaskController integration', () => {
   const findAll =
       jest.fn<FindAllMock>();
 
+  const findMyActiveTasks =
+      jest.fn<FindMyActiveTasksMock>();
+
   const claimTask =
-      jest.fn<ClaimTaskMock>();
+      jest.fn<TaskActionMock>();
+
+  const startTask =
+      jest.fn<TaskActionMock>();
+
+  const completeTask =
+      jest.fn<TaskActionMock>();
 
   beforeAll(async () => {
     const moduleRef =
@@ -51,7 +64,10 @@ describe('TaskController integration', () => {
               provide: TaskRepository,
               useValue: {
                 findAll,
+                findMyActiveTasks,
                 claimTask,
+                startTask,
+                completeTask,
               },
             },
           ],
@@ -68,9 +84,23 @@ describe('TaskController integration', () => {
 
   beforeEach(() => {
     findAll.mockReset();
+    findMyActiveTasks.mockReset();
     claimTask.mockReset();
+    startTask.mockReset();
+    completeTask.mockReset();
 
     findAll.mockResolvedValue([]);
+
+    findMyActiveTasks.mockImplementation(
+        async (workerId: string) => [
+          {
+            task_id: 'task-1',
+            status: 'ASSIGNED',
+            assigned_worker_id:
+            workerId,
+          },
+        ],
+    );
 
     claimTask.mockImplementation(
         async (
@@ -86,7 +116,76 @@ describe('TaskController integration', () => {
           return {
             task_id: taskId,
             status: 'ASSIGNED',
-            assigned_worker_id: workerId,
+            assigned_worker_id:
+            workerId,
+          };
+        },
+    );
+
+    startTask.mockImplementation(
+        async (
+            taskId: string,
+            workerId: string,
+        ) => {
+          if (taskId === 'missing-task') {
+            throw new Error(
+                'TASK_NOT_FOUND',
+            );
+          }
+
+          if (taskId === 'other-worker-task') {
+            throw new Error(
+                'TASK_NOT_OWNED',
+            );
+          }
+
+          if (taskId === 'invalid-start-task') {
+            throw new Error(
+                'INVALID_TASK_STATUS',
+            );
+          }
+
+          return {
+            task_id: taskId,
+            status: 'IN_PROGRESS',
+            assigned_worker_id:
+            workerId,
+          };
+        },
+    );
+
+    completeTask.mockImplementation(
+        async (
+            taskId: string,
+            workerId: string,
+        ) => {
+          if (taskId === 'missing-task') {
+            throw new Error(
+                'TASK_NOT_FOUND',
+            );
+          }
+
+          if (taskId === 'other-worker-task') {
+            throw new Error(
+                'TASK_NOT_OWNED',
+            );
+          }
+
+          if (
+              taskId === 'invalid-complete-task'
+          ) {
+            throw new Error(
+                'INVALID_TASK_STATUS',
+            );
+          }
+
+          return {
+            task_id: taskId,
+            status: 'COMPLETED',
+            assigned_worker_id:
+            workerId,
+            completed_at:
+                '2026-10-02T12:00:00.000Z',
           };
         },
     );
@@ -156,6 +255,45 @@ describe('TaskController integration', () => {
         .not.toHaveBeenCalled();
   });
 
+  it('should return My Tasks for the authenticated worker', async () => {
+    const token =
+        createWorkerToken(
+            'trusted-worker-1',
+        );
+
+    await request(app.getHttpServer())
+        .get('/wkms/tasks/my-tasks')
+        .set(
+            'Authorization',
+            `Bearer ${token}`,
+        )
+        .expect(200)
+        .expect([
+          {
+            task_id: 'task-1',
+            status: 'ASSIGNED',
+            assigned_worker_id:
+                'trusted-worker-1',
+          },
+        ]);
+
+    expect(
+        findMyActiveTasks,
+    ).toHaveBeenCalledWith(
+        'trusted-worker-1',
+    );
+  });
+
+  it('should reject My Tasks without authentication', async () => {
+    await request(app.getHttpServer())
+        .get('/wkms/tasks/my-tasks')
+        .expect(401);
+
+    expect(
+        findMyActiveTasks,
+    ).not.toHaveBeenCalled();
+  });
+
   it('should claim using the trusted JWT worker identity', async () => {
     const token =
         createWorkerToken(
@@ -189,7 +327,7 @@ describe('TaskController integration', () => {
         );
   });
 
-  it('should return 401 when authentication is missing', async () => {
+  it('should return 401 when claim authentication is missing', async () => {
     await request(app.getHttpServer())
         .post(
             '/wkms/tasks/task-1/claim',
@@ -219,5 +357,177 @@ describe('TaskController integration', () => {
             'limit-task',
             'worker-1',
         );
+  });
+
+  it('should start a task using the authenticated worker identity', async () => {
+    const token =
+        createWorkerToken(
+            'trusted-worker-1',
+        );
+
+    await request(app.getHttpServer())
+        .post(
+            '/wkms/tasks/task-1/start',
+        )
+        .set(
+            'Authorization',
+            `Bearer ${token}`,
+        )
+        .expect(201)
+        .expect({
+          task_id: 'task-1',
+          status: 'IN_PROGRESS',
+          assigned_worker_id:
+              'trusted-worker-1',
+        });
+
+    expect(startTask)
+        .toHaveBeenCalledWith(
+            'task-1',
+            'trusted-worker-1',
+        );
+  });
+
+  it('should reject starting another workers task', async () => {
+    const token =
+        createWorkerToken();
+
+    await request(app.getHttpServer())
+        .post(
+            '/wkms/tasks/other-worker-task/start',
+        )
+        .set(
+            'Authorization',
+            `Bearer ${token}`,
+        )
+        .expect(403);
+  });
+
+  it('should return 409 when starting from an invalid status', async () => {
+    const token =
+        createWorkerToken();
+
+    await request(app.getHttpServer())
+        .post(
+            '/wkms/tasks/invalid-start-task/start',
+        )
+        .set(
+            'Authorization',
+            `Bearer ${token}`,
+        )
+        .expect(409);
+  });
+
+  it('should return 404 when starting a missing task', async () => {
+    const token =
+        createWorkerToken();
+
+    await request(app.getHttpServer())
+        .post(
+            '/wkms/tasks/missing-task/start',
+        )
+        .set(
+            'Authorization',
+            `Bearer ${token}`,
+        )
+        .expect(404);
+  });
+
+  it('should reject starting without authentication', async () => {
+    await request(app.getHttpServer())
+        .post(
+            '/wkms/tasks/task-1/start',
+        )
+        .expect(401);
+
+    expect(startTask)
+        .not.toHaveBeenCalled();
+  });
+
+  it('should complete a task using the authenticated worker identity', async () => {
+    const token =
+        createWorkerToken(
+            'trusted-worker-1',
+        );
+
+    await request(app.getHttpServer())
+        .post(
+            '/wkms/tasks/task-1/complete',
+        )
+        .set(
+            'Authorization',
+            `Bearer ${token}`,
+        )
+        .expect(201)
+        .expect({
+          task_id: 'task-1',
+          status: 'COMPLETED',
+          assigned_worker_id:
+              'trusted-worker-1',
+          completed_at:
+              '2026-10-02T12:00:00.000Z',
+        });
+
+    expect(completeTask)
+        .toHaveBeenCalledWith(
+            'task-1',
+            'trusted-worker-1',
+        );
+  });
+
+  it('should reject completing another workers task', async () => {
+    const token =
+        createWorkerToken();
+
+    await request(app.getHttpServer())
+        .post(
+            '/wkms/tasks/other-worker-task/complete',
+        )
+        .set(
+            'Authorization',
+            `Bearer ${token}`,
+        )
+        .expect(403);
+  });
+
+  it('should return 409 when completing from an invalid status', async () => {
+    const token =
+        createWorkerToken();
+
+    await request(app.getHttpServer())
+        .post(
+            '/wkms/tasks/invalid-complete-task/complete',
+        )
+        .set(
+            'Authorization',
+            `Bearer ${token}`,
+        )
+        .expect(409);
+  });
+
+  it('should return 404 when completing a missing task', async () => {
+    const token =
+        createWorkerToken();
+
+    await request(app.getHttpServer())
+        .post(
+            '/wkms/tasks/missing-task/complete',
+        )
+        .set(
+            'Authorization',
+            `Bearer ${token}`,
+        )
+        .expect(404);
+  });
+
+  it('should reject completing without authentication', async () => {
+    await request(app.getHttpServer())
+        .post(
+            '/wkms/tasks/task-1/complete',
+        )
+        .expect(401);
+
+    expect(completeTask)
+        .not.toHaveBeenCalled();
   });
 });
