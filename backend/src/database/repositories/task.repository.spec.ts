@@ -38,7 +38,7 @@ function createDatabaseService(
 }
 
 describe('TaskRepository', () => {
-  it('should return only unassigned tasks ordered by submission time', async () => {
+  it('should return available tasks ordered by submission time', async () => {
     const queryMock = jest
         .fn<
             (
@@ -59,13 +59,23 @@ describe('TaskRepository', () => {
     const result = await repository.findAll();
 
     expect(queryMock).toHaveBeenCalledWith(
-        expect.stringContaining('WHERE status = $1'),
-        ['UNASSIGNED'],
+        expect.stringContaining(
+            'WHERE status IN ($1, $2)',
+        ),
+        [
+          'UNASSIGNED',
+          'ESCALATED',
+        ],
     );
 
     expect(queryMock).toHaveBeenCalledWith(
-        expect.stringContaining('ORDER BY submitted_at ASC'),
-        ['UNASSIGNED'],
+        expect.stringContaining(
+            'ORDER BY submitted_at ASC',
+        ),
+        [
+          'UNASSIGNED',
+          'ESCALATED',
+        ],
     );
 
     expect(result).toEqual([]);
@@ -635,5 +645,252 @@ describe('TaskRepository', () => {
 
     expect(result).toBeNull();
   });
+
+  it('should escalate overdue unassigned tasks', async () => {
+    const escalatedTask = {
+      task_id: 'task-1',
+      status: 'ESCALATED',
+    };
+
+    const queryMock = jest
+        .fn<
+            (
+                text: string,
+                params?: unknown[],
+            ) => Promise<{ rows: unknown[] }>
+        >()
+        .mockResolvedValue({
+          rows: [escalatedTask],
+        });
+
+    const repository =
+        new TaskRepository({
+          query: queryMock,
+        } as unknown as DatabaseService);
+
+    const result =
+        await repository.escalateOverdueTasks();
+
+    expect(queryMock).toHaveBeenCalledWith(
+        expect.stringContaining(
+            "submitted_at <= NOW() - INTERVAL '15 minutes'",
+        ),
+        [
+          'ESCALATED',
+          'UNASSIGNED',
+        ],
+    );
+
+    expect(queryMock).toHaveBeenCalledWith(
+        expect.stringContaining(
+            'WHERE status = $2',
+        ),
+        [
+          'ESCALATED',
+          'UNASSIGNED',
+        ],
+    );
+
+    expect(result).toEqual([
+      escalatedTask,
+    ]);
+  });
+
+  it('should safely return no escalated tasks when none are overdue', async () => {
+    const queryMock = jest
+        .fn<
+            (
+                text: string,
+                params?: unknown[],
+            ) => Promise<{ rows: unknown[] }>
+        >()
+        .mockResolvedValue({
+          rows: [],
+        });
+
+    const repository =
+        new TaskRepository({
+          query: queryMock,
+        } as unknown as DatabaseService);
+
+    const result =
+        await repository.escalateOverdueTasks();
+
+    expect(result).toEqual([]);
+  });
+
+  it('should claim an escalated task for an active worker', async () => {
+    const { query, client } =
+        createMockClient();
+
+    query
+        .mockResolvedValueOnce({
+          rowCount: 1,
+          rows: [
+            {
+              worker_id: 'worker-1',
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rowCount: 1,
+          rows: [
+            {
+              count: 0,
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rowCount: 1,
+          rows: [
+            {
+              task_id: 'task-1',
+              status: 'ESCALATED',
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rowCount: 1,
+          rows: [
+            {
+              task_id: 'task-1',
+              status: 'ASSIGNED',
+              assigned_worker_id:
+                  'worker-1',
+            },
+          ],
+        });
+
+    const repository =
+        new TaskRepository(
+            createDatabaseService(client),
+        );
+
+    const result =
+        await repository.claimTask(
+            'task-1',
+            'worker-1',
+        );
+
+    expect(result).toMatchObject({
+      task_id: 'task-1',
+      status: 'ASSIGNED',
+      assigned_worker_id:
+          'worker-1',
+    });
+
+    expect(query)
+        .toHaveBeenCalledTimes(4);
+
+    expect(query).toHaveBeenNthCalledWith(
+        3,
+        expect.stringContaining(
+            'FOR UPDATE',
+        ),
+        ['task-1'],
+    );
+  });
+
+  it('should include tasks exactly at the 15-minute threshold', async () => {
+    const queryMock = jest
+        .fn<
+            (
+                text: string,
+                params?: unknown[],
+            ) => Promise<{ rows: unknown[] }>
+        >()
+        .mockResolvedValue({
+          rows: [],
+        });
+
+    const repository =
+        new TaskRepository({
+          query: queryMock,
+        } as unknown as DatabaseService);
+
+    await repository.escalateOverdueTasks();
+
+    expect(queryMock).toHaveBeenCalledWith(
+        expect.stringContaining(
+            "submitted_at <= NOW() - INTERVAL '15 minutes'",
+        ),
+        [
+          'ESCALATED',
+          'UNASSIGNED',
+        ],
+    );
+  });
+
+  it('should only escalate UNASSIGNED tasks', async () => {
+    const queryMock = jest
+        .fn<
+            (
+                text: string,
+                params?: unknown[],
+            ) => Promise<{ rows: unknown[] }>
+        >()
+        .mockResolvedValue({
+          rows: [],
+        });
+
+    const repository =
+        new TaskRepository({
+          query: queryMock,
+        } as unknown as DatabaseService);
+
+    await repository.escalateOverdueTasks();
+
+    expect(queryMock).toHaveBeenCalledWith(
+        expect.stringContaining(
+            'WHERE status = $2',
+        ),
+        [
+          'ESCALATED',
+          'UNASSIGNED',
+        ],
+    );
+  });
+
+  it('should remain safe when escalation processing runs repeatedly', async () => {
+    const task = {
+      task_id: 'task-1',
+      status: 'ESCALATED',
+    };
+
+    const queryMock = jest
+        .fn<
+            (
+                text: string,
+                params?: unknown[],
+            ) => Promise<{ rows: unknown[] }>
+        >()
+        .mockResolvedValueOnce({
+          rows: [task],
+        })
+        .mockResolvedValueOnce({
+          rows: [],
+        });
+
+    const repository =
+        new TaskRepository({
+          query: queryMock,
+        } as unknown as DatabaseService);
+
+    const firstRun =
+        await repository.escalateOverdueTasks();
+
+    const secondRun =
+        await repository.escalateOverdueTasks();
+
+    expect(firstRun).toEqual([
+      task,
+    ]);
+
+    expect(secondRun).toEqual([]);
+
+    expect(queryMock)
+        .toHaveBeenCalledTimes(2);
+  });
+
 
 });

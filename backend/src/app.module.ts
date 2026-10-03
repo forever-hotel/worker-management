@@ -8,6 +8,7 @@ import { validateEnvironment } from './config/env.validation';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
 import { TaskModule } from './tasks/task.module';
+import {ScheduleModule} from "@nestjs/schedule";
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { TaskModule } from './tasks/task.module';
       load: [configuration],
       validate: validateEnvironment,
     }),
+    ScheduleModule.forRoot(),
     DatabaseModule,
     AuthModule,
     HealthModule,
