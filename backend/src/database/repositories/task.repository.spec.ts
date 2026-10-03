@@ -892,5 +892,171 @@ describe('TaskRepository', () => {
         .toHaveBeenCalledTimes(2);
   });
 
+  it('should count active tasks for the authenticated worker', async () => {
+    const queryMock = jest
+        .fn<
+            (
+                text: string,
+                params?: unknown[],
+            ) => Promise<{
+              rows: Array<{ count: number }>;
+            }>
+        >()
+        .mockResolvedValue({
+          rows: [
+            {
+              count: 2,
+            },
+          ],
+        });
+
+    const repository =
+        new TaskRepository({
+          query: queryMock,
+        } as unknown as DatabaseService);
+
+    const result =
+        await repository.countActiveTasks(
+            'worker-1',
+        );
+
+    expect(queryMock).toHaveBeenCalledWith(
+        expect.stringContaining(
+            'assigned_worker_id = $1',
+        ),
+        [
+          'worker-1',
+          'ASSIGNED',
+          'IN_PROGRESS',
+        ],
+    );
+
+    expect(result).toBe(2);
+  });
+
+  it('should count available escalated tasks', async () => {
+    const queryMock = jest
+        .fn<
+            (
+                text: string,
+                params?: unknown[],
+            ) => Promise<{
+              rows: Array<{ count: number }>;
+            }>
+        >()
+        .mockResolvedValue({
+          rows: [
+            {
+              count: 3,
+            },
+          ],
+        });
+
+    const repository =
+        new TaskRepository({
+          query: queryMock,
+        } as unknown as DatabaseService);
+
+    const result =
+        await repository
+            .countAvailableEscalatedTasks();
+
+    expect(queryMock).toHaveBeenCalledWith(
+        expect.stringContaining(
+            'status = $1',
+        ),
+        [
+          'ESCALATED',
+        ],
+    );
+
+    expect(queryMock).toHaveBeenCalledWith(
+        expect.stringContaining(
+            'assigned_worker_id IS NULL',
+        ),
+        [
+          'ESCALATED',
+        ],
+    );
+
+    expect(result).toBe(3);
+  });
+
+  it('should return completed tasks for the worker within the summary window', async () => {
+    const startAt =
+        new Date(
+            '2026-10-03T00:00:00.000Z',
+        );
+
+    const endAt =
+        new Date(
+            '2026-10-04T00:00:00.000Z',
+        );
+
+    const tasks = [
+      {
+        task_id: 'task-1',
+        room_number: '101',
+        category: 'ROOM_CLEANING',
+        priority: 'NORMAL',
+        submitted_at:
+            '2026-10-03T01:00:00.000Z',
+        completed_at:
+            '2026-10-03T01:30:00.000Z',
+      },
+    ];
+
+    const queryMock = jest
+        .fn<
+            (
+                text: string,
+                params?: unknown[],
+            ) => Promise<{
+              rows: typeof tasks;
+            }>
+        >()
+        .mockResolvedValue({
+          rows: tasks,
+        });
+
+    const repository =
+        new TaskRepository({
+          query: queryMock,
+        } as unknown as DatabaseService);
+
+    const result =
+        await repository
+            .findCompletedTasksForWindow(
+                'worker-1',
+                startAt,
+                endAt,
+            );
+
+    expect(queryMock).toHaveBeenCalledWith(
+        expect.stringContaining(
+            'completed_at >= $3',
+        ),
+        [
+          'worker-1',
+          'COMPLETED',
+          startAt,
+          endAt,
+        ],
+    );
+
+    expect(queryMock).toHaveBeenCalledWith(
+        expect.stringContaining(
+            'completed_at < $4',
+        ),
+        [
+          'worker-1',
+          'COMPLETED',
+          startAt,
+          endAt,
+        ],
+    );
+
+    expect(result).toEqual(tasks);
+  });
 
 });
