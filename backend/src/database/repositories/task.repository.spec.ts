@@ -556,4 +556,84 @@ describe('TaskRepository', () => {
     );
   });
 
+  it('should return a task by id', async () => {
+    const task = {
+      task_id: 'task-1',
+      room_number: 'DEMO101',
+      category: 'ROOM_CLEANING',
+      status: 'ASSIGNED',
+      assigned_worker_id: 'worker-1',
+    };
+
+    const queryMock = jest
+        .fn<
+            (
+                text: string,
+                params?: unknown[],
+            ) => Promise<{ rows: unknown[] }>
+        >()
+        .mockResolvedValue({
+          rows: [task],
+        });
+
+    const mockDatabaseService = {
+      query: queryMock,
+    } as unknown as DatabaseService;
+
+    const repository =
+        new TaskRepository(
+            mockDatabaseService,
+        );
+
+    const result =
+        await repository.findById(
+            'task-1',
+        );
+
+    expect(queryMock).toHaveBeenCalledWith(
+        expect.stringContaining(
+            'WHERE task_id = $1',
+        ),
+        ['task-1'],
+    );
+
+    expect(result).toEqual(task);
+  });
+
+  it('should return null when task does not exist', async () => {
+    const queryMock = jest
+        .fn<
+            (
+                text: string,
+                params?: unknown[],
+            ) => Promise<{ rows: unknown[] }>
+        >()
+        .mockResolvedValue({
+          rows: [],
+        });
+
+    const mockDatabaseService = {
+      query: queryMock,
+    } as unknown as DatabaseService;
+
+    const repository =
+        new TaskRepository(
+            mockDatabaseService,
+        );
+
+    const result =
+        await repository.findById(
+            'missing-task',
+        );
+
+    expect(queryMock).toHaveBeenCalledWith(
+        expect.stringContaining(
+            'WHERE task_id = $1',
+        ),
+        ['missing-task'],
+    );
+
+    expect(result).toBeNull();
+  });
+
 });

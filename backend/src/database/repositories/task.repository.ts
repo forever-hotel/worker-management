@@ -34,6 +34,17 @@ export class TaskRepository {
     return result.rows;
   }
 
+    async findById(taskId: string) {
+        const result = await this.databaseService.query(
+            `SELECT *
+     FROM wkms_tasks
+     WHERE task_id = $1`,
+            [taskId],
+        );
+
+        return result.rows[0] ?? null;
+    }
+
   async claimTask(taskId: string, workerId: string) {
     return this.databaseService.withTransaction(async (client) => {
       const workerResult = await client.query(

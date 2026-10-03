@@ -15,6 +15,11 @@ type TaskActionMock = (
     workerId: string,
 ) => Promise<unknown>;
 
+type GetTaskDetailMock = (
+    taskId: string,
+    workerId: string,
+) => Promise<unknown>;
+
 const worker: AuthenticatedWorker = {
   worker_id: 'worker-1',
   username: 'worker_001',
@@ -255,5 +260,62 @@ describe('TaskController', () => {
 
     expect(completeTask)
         .not.toHaveBeenCalled();
+  });
+
+  it('should return task detail using the authenticated worker identity', async () => {
+    const task = {
+      task_id: 'task-1',
+      room_number: 'DEMO101',
+      status: 'ASSIGNED',
+      assigned_worker_id:
+          'worker-1',
+    };
+
+    const getTaskDetail = jest
+        .fn<GetTaskDetailMock>()
+        .mockResolvedValue(task);
+
+    const controller =
+        new TaskController({
+          getTaskDetail,
+        } as unknown as TaskService);
+
+    const result =
+        await controller.getTaskDetail(
+            'task-1',
+            worker,
+        );
+
+    expect(
+        getTaskDetail,
+    ).toHaveBeenCalledWith(
+        'task-1',
+        'worker-1',
+    );
+
+    expect(result).toEqual(task);
+  });
+
+  it('should reject task detail without an authenticated worker identity', async () => {
+    const getTaskDetail =
+        jest.fn<GetTaskDetailMock>();
+
+    const controller =
+        new TaskController({
+          getTaskDetail,
+        } as unknown as TaskService);
+
+    await expect(
+        controller.getTaskDetail(
+            'task-1',
+            undefined,
+        ),
+    ).rejects.toBeInstanceOf(
+        UnauthorizedException,
+    );
+
+    expect(
+        getTaskDetail,
+    ).not.toHaveBeenCalled();
   });
 });
