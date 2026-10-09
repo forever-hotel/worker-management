@@ -8,7 +8,7 @@ jest.unstable_mockModule('amqplib', () => ({
   connect: mockConnect,
 }));
 
-const { RabbitMqService } = await import('./rabbitmq.service');
+let RabbitMqService: typeof import('./rabbitmq.service').RabbitMqService;
 
 function createMockBroker() {
   const channelEvents = new EventEmitter();
@@ -60,6 +60,11 @@ function createMockBroker() {
 }
 
 describe('RabbitMqService connection initialization', () => {
+  beforeAll(async () => {
+    const module = await import('./rabbitmq.service');
+    RabbitMqService = module.RabbitMqService;
+  });
+
   beforeEach(() => {
     mockConnect.mockReset();
   });
