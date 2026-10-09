@@ -12,3 +12,19 @@ export type {
 } from "./types/task";
 
 export type { TaskDetail } from "./types/task-detail";
+export {
+    claimTask,
+    completeTask,
+    getMyTasks,
+    getTaskQueue,
+    startTask,
+} from "./api/tasks.api";
+
+export {
+    calculateElapsedMinutes,
+    mapTaskApiRecord,
+} from "./mappers/task.mapper";
+
+export type {
+    TaskApiRecord,
+} from "./types/task-api";
