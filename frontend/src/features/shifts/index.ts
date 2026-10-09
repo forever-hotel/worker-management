@@ -1,7 +1,6 @@
 export { ShiftDashboardScreen } from "./components/shift-dashboard-screen";
 
-export {
-    mockShiftSummary,
-    mockCompletedShiftTasks,
-    mockConnectivity,
-} from "./constants/mock-shift-dashboard.constants";
+export type {
+    ShiftCompletedTask,
+    ShiftSummary,
+} from "./types/shift-summary";

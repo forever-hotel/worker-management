@@ -1,11 +1,25 @@
-import type { ReactNode } from "react";
+import type {
+    ReactNode,
+} from "react";
 
-type ProtectedLayoutProps = {
-    children: ReactNode;
-};
+import {
+    RequireAuth,
+} from "@/features/auth";
+
+import {
+    TaskDataProvider,
+} from "@/providers/task-data-provider";
 
 export default function ProtectedLayout({
                                             children,
-                                        }: ProtectedLayoutProps) {
-    return children;
+                                        }: {
+    children: ReactNode;
+}) {
+    return (
+        <RequireAuth>
+            <TaskDataProvider>
+                {children}
+            </TaskDataProvider>
+        </RequireAuth>
+    );
 }
