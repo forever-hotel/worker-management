@@ -1,17 +1,23 @@
-import { Injectable } from '@nestjs/common';
-import { Interval } from '@nestjs/schedule';
-import { TaskRepository } from '../database/repositories/task.repository';
+import { Injectable, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
-const ESCALATION_CHECK_INTERVAL_MS = 60_000;
+import { TaskRepository } from '../database/repositories/task.repository';
 
 @Injectable()
 export class TaskEscalationService {
-    constructor(
-        private readonly taskRepository: TaskRepository,
-    ) {}
+  private readonly logger = new Logger(TaskEscalationService.name);
 
-    @Interval(ESCALATION_CHECK_INTERVAL_MS)
-    async processOverdueTasks(): Promise<void> {
-        await this.taskRepository.escalateOverdueTasks();
+  constructor(private readonly taskRepository: TaskRepository) {}
+
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async processOverdueTasks(): Promise<void> {
+    const newlyEscalatedTasks =
+      await this.taskRepository.escalateOverdueTasks();
+
+    if (newlyEscalatedTasks.length > 0) {
+      this.logger.log(
+        `Escalated ${newlyEscalatedTasks.length} task(s) and saved their outbox events`,
+      );
     }
+  }
 }
