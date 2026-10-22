@@ -61,7 +61,7 @@
       "multer": "2.4.0"
     },
     "@nestjs/mau": {
-      "undici": "6.29.0"
+      "undici": "6.29.1"
     },
     "external-editor": {
       "tmp": "0.2.7"
