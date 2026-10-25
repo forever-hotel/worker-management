@@ -6,6 +6,19 @@ import {
 import { TaskRepository } from '../database/repositories/task.repository';
 import { TaskService } from './task.service';
 
+
+const emitTaskClaimed = jest.fn<(taskId: string) => void>();
+
+function createTaskService(repository: TaskRepository): TaskService {
+  return new TaskService(
+    repository,
+    { emitTaskClaimed } as unknown as ConstructorParameters<typeof TaskService>[1],
+  );
+}
+
+beforeEach(() => {
+  emitTaskClaimed.mockClear();
+});
 type FindAllMock = () => Promise<unknown[]>;
 
 type ClaimTaskMock = (
@@ -43,7 +56,7 @@ describe('TaskService', () => {
       findAll,
     } as unknown as TaskRepository;
 
-    const service = new TaskService(mockTaskRepository);
+    const service = createTaskService(mockTaskRepository);
 
     const result = await service.getQueue();
 
@@ -66,7 +79,7 @@ describe('TaskService', () => {
       claimTask,
     } as unknown as TaskRepository;
 
-    const service = new TaskService(mockTaskRepository);
+    const service = createTaskService(mockTaskRepository);
 
     const result = await service.claimTask(
         'task-1',
@@ -88,7 +101,7 @@ describe('TaskService', () => {
             new Error('ACTIVE_TASK_LIMIT_REACHED'),
         );
 
-    const service = new TaskService({
+    const service = createTaskService({
       claimTask,
     } as unknown as TaskRepository);
 
@@ -102,7 +115,7 @@ describe('TaskService', () => {
         .fn<ClaimTaskMock>()
         .mockRejectedValue(new Error('TASK_NOT_FOUND'));
 
-    const service = new TaskService({
+    const service = createTaskService({
       claimTask,
     } as unknown as TaskRepository);
 
@@ -116,7 +129,7 @@ describe('TaskService', () => {
         .fn<ClaimTaskMock>()
         .mockRejectedValue(new Error('TASK_NOT_AVAILABLE'));
 
-    const service = new TaskService({
+    const service = createTaskService({
       claimTask,
     } as unknown as TaskRepository);
 
@@ -132,7 +145,7 @@ describe('TaskService', () => {
             new Error('WORKER_NOT_FOUND_OR_INACTIVE'),
         );
 
-    const service = new TaskService({
+    const service = createTaskService({
       claimTask,
     } as unknown as TaskRepository);
 
@@ -148,7 +161,7 @@ describe('TaskService', () => {
         .fn<ClaimTaskMock>()
         .mockRejectedValue(unexpectedError);
 
-    const service = new TaskService({
+    const service = createTaskService({
       claimTask,
     } as unknown as TaskRepository);
 
@@ -164,7 +177,7 @@ describe('TaskService', () => {
         .fn<ClaimTaskMock>()
         .mockRejectedValue(unexpectedValue);
 
-    const service = new TaskService({
+    const service = createTaskService({
       claimTask,
     } as unknown as TaskRepository);
 
@@ -187,7 +200,7 @@ describe('TaskService', () => {
         .fn<FindMyActiveTasksMock>()
         .mockResolvedValue(tasks);
 
-    const service = new TaskService({
+    const service = createTaskService({
       findMyActiveTasks,
     } as unknown as TaskRepository);
 
@@ -219,7 +232,7 @@ describe('TaskService', () => {
             startedTask,
         );
 
-    const service = new TaskService({
+    const service = createTaskService({
       startTask,
     } as unknown as TaskRepository);
 
@@ -255,7 +268,7 @@ describe('TaskService', () => {
             completedTask,
         );
 
-    const service = new TaskService({
+    const service = createTaskService({
       completeTask,
     } as unknown as TaskRepository);
 
@@ -286,7 +299,7 @@ describe('TaskService', () => {
             ),
         );
 
-    const service = new TaskService({
+    const service = createTaskService({
       startTask,
     } as unknown as TaskRepository);
 
@@ -309,7 +322,7 @@ describe('TaskService', () => {
             ),
         );
 
-    const service = new TaskService({
+    const service = createTaskService({
       startTask,
     } as unknown as TaskRepository);
 
@@ -332,7 +345,7 @@ describe('TaskService', () => {
             ),
         );
 
-    const service = new TaskService({
+    const service = createTaskService({
       startTask,
     } as unknown as TaskRepository);
 
@@ -355,7 +368,7 @@ describe('TaskService', () => {
             ),
         );
 
-    const service = new TaskService({
+    const service = createTaskService({
       completeTask,
     } as unknown as TaskRepository);
 
@@ -378,7 +391,7 @@ describe('TaskService', () => {
             ),
         );
 
-    const service = new TaskService({
+    const service = createTaskService({
       completeTask,
     } as unknown as TaskRepository);
 
@@ -401,7 +414,7 @@ describe('TaskService', () => {
             ),
         );
 
-    const service = new TaskService({
+    const service = createTaskService({
       completeTask,
     } as unknown as TaskRepository);
 
@@ -423,7 +436,7 @@ describe('TaskService', () => {
         .fn<StartTaskMock>()
         .mockRejectedValue(error);
 
-    const service = new TaskService({
+    const service = createTaskService({
       startTask,
     } as unknown as TaskRepository);
 
@@ -442,7 +455,7 @@ describe('TaskService', () => {
             'UNKNOWN_FAILURE',
         );
 
-    const service = new TaskService({
+    const service = createTaskService({
       startTask,
     } as unknown as TaskRepository);
 
@@ -467,7 +480,7 @@ describe('TaskService', () => {
         .fn<FindByIdMock>()
         .mockResolvedValue(task);
 
-    const service = new TaskService({
+    const service = createTaskService({
       findById,
     } as unknown as TaskRepository);
 
@@ -495,7 +508,7 @@ describe('TaskService', () => {
         .fn<FindByIdMock>()
         .mockResolvedValue(task);
 
-    const service = new TaskService({
+    const service = createTaskService({
       findById,
     } as unknown as TaskRepository);
 
@@ -520,7 +533,7 @@ describe('TaskService', () => {
         .fn<FindByIdMock>()
         .mockResolvedValue(task);
 
-    const service = new TaskService({
+    const service = createTaskService({
       findById,
     } as unknown as TaskRepository);
 
@@ -545,7 +558,7 @@ describe('TaskService', () => {
         .fn<FindByIdMock>()
         .mockResolvedValue(task);
 
-    const service = new TaskService({
+    const service = createTaskService({
       findById,
     } as unknown as TaskRepository);
 
@@ -572,7 +585,7 @@ describe('TaskService', () => {
         .fn<FindByIdMock>()
         .mockResolvedValue(task);
 
-    const service = new TaskService({
+    const service = createTaskService({
       findById,
     } as unknown as TaskRepository);
 
@@ -590,7 +603,7 @@ describe('TaskService', () => {
         .fn<FindByIdMock>()
         .mockResolvedValue(null);
 
-    const service = new TaskService({
+    const service = createTaskService({
       findById,
     } as unknown as TaskRepository);
 
@@ -614,7 +627,7 @@ describe('TaskService', () => {
               'worker-2',
         });
 
-    const service = new TaskService({
+    const service = createTaskService({
       findById,
     } as unknown as TaskRepository);
 
@@ -637,7 +650,7 @@ describe('TaskService', () => {
           assigned_worker_id: null,
         });
 
-    const service = new TaskService({
+    const service = createTaskService({
       findById,
     } as unknown as TaskRepository);
 
@@ -661,7 +674,7 @@ describe('TaskService', () => {
               'worker-1',
         });
 
-    const service = new TaskService({
+    const service = createTaskService({
       findById,
     } as unknown as TaskRepository);
 
@@ -675,4 +688,70 @@ describe('TaskService', () => {
     );
   });
 
+
+  // DDP-79 realtime claim tests
+  describe('realtime task claim notifications', () => {
+    it('emits task.claimed after successful persistence', async () => {
+      const claimedTask = {
+        task_id: 'task-1',
+        status: 'ASSIGNED',
+      };
+
+      const claimTask = jest
+        .fn<ClaimTaskMock>()
+        .mockResolvedValue(claimedTask);
+
+      const service = createTaskService({
+        claimTask,
+      } as unknown as TaskRepository);
+
+      const result = await service.claimTask('task-1', 'worker-1');
+
+      expect(result).toEqual(claimedTask);
+      expect(emitTaskClaimed).toHaveBeenCalledTimes(1);
+      expect(emitTaskClaimed).toHaveBeenCalledWith('task-1');
+    });
+
+    it('does not emit when the claim fails', async () => {
+      const claimTask = jest
+        .fn<ClaimTaskMock>()
+        .mockRejectedValue(new Error('TASK_NOT_AVAILABLE'));
+
+      const service = createTaskService({
+        claimTask,
+      } as unknown as TaskRepository);
+
+      await expect(
+        service.claimTask('task-1', 'worker-1'),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(emitTaskClaimed).not.toHaveBeenCalled();
+    });
+
+    it('waits for persistence before broadcasting', async () => {
+      let finishClaim!: (value: unknown) => void;
+
+      const pendingClaim = new Promise<unknown>((resolve) => {
+        finishClaim = resolve;
+      });
+
+      const claimTask = jest
+        .fn<ClaimTaskMock>()
+        .mockImplementation(() => pendingClaim);
+
+      const service = createTaskService({
+        claimTask,
+      } as unknown as TaskRepository);
+
+      const operation = service.claimTask('task-1', 'worker-1');
+
+      expect(emitTaskClaimed).not.toHaveBeenCalled();
+
+      finishClaim({ task_id: 'task-1', status: 'ASSIGNED' });
+
+      await operation;
+
+      expect(emitTaskClaimed).toHaveBeenCalledTimes(1);
+    });
+  });
 });

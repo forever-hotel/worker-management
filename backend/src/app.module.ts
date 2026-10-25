@@ -9,7 +9,8 @@ import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
 import { TaskModule } from './tasks/task.module';
 import {ScheduleModule} from "@nestjs/schedule";
-import {ShiftModule} from "./shift/shift.module";
+import { ShiftModule } from './shift/shift.module';
+import { RealtimeModule } from "./realtime/realtime.module";
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import {ShiftModule} from "./shift/shift.module";
     HealthModule,
     TaskModule,
     ShiftModule,
+    RealtimeModule,
   ],
   controllers: [AppController],
   providers: [AppService],

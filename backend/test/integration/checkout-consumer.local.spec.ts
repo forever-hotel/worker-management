@@ -171,7 +171,12 @@ localDescribe('DDP-78 real RabbitMQ checkout integration', () => {
     }
 
     const repository = new CheckoutTaskRepository(database);
-    const handler = new CheckoutCompletedHandler(repository);
+    const handler = new CheckoutCompletedHandler(
+      repository,
+      {
+        emitTaskCreated: () => undefined,
+      } as unknown as ConstructorParameters<typeof CheckoutCompletedHandler>[1],
+    );
 
     const originalHandle = handler.handle.bind(handler);
 

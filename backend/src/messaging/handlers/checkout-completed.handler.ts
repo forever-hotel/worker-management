@@ -4,11 +4,13 @@ import {
   type CheckoutTaskCreationResult,
 } from '../../database/repositories/checkout-task.repository';
 import { validateCheckoutCompletedEvent } from '../contracts/checkout-completed.validator';
+import { WkmsRealtimeGateway } from '../../realtime/wkms-realtime.gateway';
 
 @Injectable()
 export class CheckoutCompletedHandler {
   constructor(
     private readonly checkoutTaskRepository: CheckoutTaskRepository,
+    private readonly realtimeGateway: WkmsRealtimeGateway,
   ) {}
 
   async handle(payload: unknown): Promise<CheckoutTaskCreationResult> {
@@ -17,9 +19,16 @@ export class CheckoutCompletedHandler {
 
     // bookingReference is the bookings.booking_id UUID.
     // The repository verifies checkout state and prevents duplicates.
-    return this.checkoutTaskRepository.createCheckoutCleaningTask(
-      event.data.bookingReference,
-      event.data.roomNumber,
-    );
+    const result =
+      await this.checkoutTaskRepository.createCheckoutCleaningTask(
+        event.data.bookingReference,
+        event.data.roomNumber,
+      );
+
+    if (result.status === 'CREATED') {
+      this.realtimeGateway.emitTaskCreated(result.taskId);
+    }
+
+    return result;
   }
 }

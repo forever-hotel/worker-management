@@ -13,6 +13,7 @@ type TaskResult = {
 };
 
 function makeEvent() {
+
   return {
     eventId: `order-ready:${FOOD_ORDER_ID}`,
     eventType: 'order.ready',
@@ -34,15 +35,24 @@ function setup() {
     createFoodDeliveryTask,
   } as unknown as FoodDeliveryTaskRepository;
 
+  // DDP79_REALTIME_MOCK
+  const emitTaskCreated = jest.fn<(taskId: string) => void>();
+  const realtimeGateway = {
+    emitTaskCreated,
+  } as unknown as ConstructorParameters<typeof OrderReadyHandler>[1];
   return {
-    handler: new OrderReadyHandler(repository),
+    handler: new OrderReadyHandler(
+      repository,
+      realtimeGateway,
+    ),
+    emitTaskCreated,
     createFoodDeliveryTask,
   };
 }
 
 describe('OrderReadyHandler', () => {
   it('creates a food-delivery task for a valid KMS event', async () => {
-    const { handler, createFoodDeliveryTask } = setup();
+    const { handler, createFoodDeliveryTask, emitTaskCreated } = setup();
 
     createFoodDeliveryTask.mockResolvedValue({
       status: 'CREATED',
@@ -59,10 +69,12 @@ describe('OrderReadyHandler', () => {
     expect(createFoodDeliveryTask).toHaveBeenCalledTimes(1);
 
     expect(createFoodDeliveryTask).toHaveBeenCalledWith(FOOD_ORDER_ID, 'R101');
+    expect(emitTaskCreated).toHaveBeenCalledTimes(1);
+    expect(emitTaskCreated).toHaveBeenCalledWith(TASK_ID);
   });
 
   it('returns EXISTS when the task was already created', async () => {
-    const { handler, createFoodDeliveryTask } = setup();
+    const { handler, createFoodDeliveryTask, emitTaskCreated } = setup();
 
     createFoodDeliveryTask.mockResolvedValue({
       status: 'EXISTS',
@@ -77,6 +89,7 @@ describe('OrderReadyHandler', () => {
     });
 
     expect(createFoodDeliveryTask).toHaveBeenCalledTimes(1);
+    expect(emitTaskCreated).not.toHaveBeenCalled();
   });
 
   it('rejects malformed events before accessing the database', async () => {
@@ -105,7 +118,7 @@ describe('OrderReadyHandler', () => {
   });
 
   it('propagates temporary database failures for RabbitMQ retry', async () => {
-    const { handler, createFoodDeliveryTask } = setup();
+    const { handler, createFoodDeliveryTask, emitTaskCreated } = setup();
 
     createFoodDeliveryTask.mockRejectedValue(
       new Error('FOOD_ORDER_NOT_CONFIRMED_READY'),
@@ -116,6 +129,7 @@ describe('OrderReadyHandler', () => {
     );
 
     expect(createFoodDeliveryTask).toHaveBeenCalledTimes(1);
+    expect(emitTaskCreated).not.toHaveBeenCalled();
   });
 
   it('propagates conflicting room errors instead of acknowledging success', async () => {

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 import { FoodDeliveryTaskRepository } from '../../database/repositories/food-delivery-task.repository';
 import { validateOrderReadyEvent } from '../contracts/order-ready.validator';
+import { WkmsRealtimeGateway } from '../../realtime/wkms-realtime.gateway';
 
 export type OrderReadyHandlingResult = {
   status: 'CREATED' | 'EXISTS';
@@ -12,6 +13,7 @@ export type OrderReadyHandlingResult = {
 export class OrderReadyHandler {
   constructor(
     private readonly foodDeliveryTaskRepository: FoodDeliveryTaskRepository,
+    private readonly realtimeGateway: WkmsRealtimeGateway,
   ) {}
 
   async handle(payload: unknown): Promise<OrderReadyHandlingResult> {
@@ -20,9 +22,16 @@ export class OrderReadyHandler {
 
     // The repository verifies the order and creates the task
     // transactionally, or returns the existing task.
-    return this.foodDeliveryTaskRepository.createFoodDeliveryTask(
-      event.data.foodOrderId,
-      event.data.roomNumber,
-    );
+    const result =
+      await this.foodDeliveryTaskRepository.createFoodDeliveryTask(
+        event.data.foodOrderId,
+        event.data.roomNumber,
+      );
+
+    if (result.status === 'CREATED') {
+      this.realtimeGateway.emitTaskCreated(result.taskId);
+    }
+
+    return result;
   }
 }

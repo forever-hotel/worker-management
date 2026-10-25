@@ -14,6 +14,8 @@ import type { TaskApiRecord } from "@/features/tasks/types/task-api";
 import { ApiError } from "@/lib/api-client";
 
 import { TaskDataProvider, useTaskData } from "./task-data-provider";
+import {Socket} from "socket.io-client";
+import {connectTaskSocket} from "@/lib/task-socket";
 
 const mockReplace = jest.fn();
 
@@ -29,9 +31,20 @@ jest.mock("@/features/tasks/api/tasks.api", () => ({
   getMyTasks: jest.fn(),
 }));
 
+jest.mock("@/lib/task-socket", () => ({
+  connectTaskSocket: jest.fn(),
+  TASK_SOCKET_EVENTS: [
+    "task.created",
+    "task.claimed",
+    "task.escalated",
+  ],
+}));
+
 const mockedGetTaskQueue = jest.mocked(getTaskQueue);
 
 const mockedGetMyTasks = jest.mocked(getMyTasks);
+
+const mockedConnectTaskSocket = jest.mocked(connectTaskSocket);
 
 const queueTasks: TaskApiRecord[] = [
   {
@@ -152,8 +165,8 @@ describe("TaskDataProvider", () => {
     jest.clearAllMocks();
 
     mockedGetTaskQueue.mockResolvedValue(queueTasks);
-
     mockedGetMyTasks.mockResolvedValue(myTasks);
+    mockedConnectTaskSocket.mockReturnValue(null);
   });
 
   it("loads queue and My Tasks once on initial protected entry", async () => {
@@ -493,4 +506,95 @@ describe("TaskDataProvider", () => {
       consoleError.mockRestore();
     }
   });
+
+
+  it("refreshes task data when realtime notifications arrive", async () => {
+    const listeners = new Map<string, () => void>();
+
+    const socket = {
+      on: jest.fn((event: string, handler: () => void) => {
+        listeners.set(event, handler);
+      }),
+      off: jest.fn((event: string) => {
+        listeners.delete(event);
+      }),
+      connect: jest.fn(),
+      disconnect: jest.fn(),
+    };
+
+    mockedConnectTaskSocket.mockReturnValue(
+        socket as unknown as Socket,
+    );
+
+    renderProvider();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("loading")).toHaveTextContent("ready");
+    });
+
+    expect(socket.connect).toHaveBeenCalled();
+
+    for (const event of [
+      "task.created",
+      "task.claimed",
+      "task.escalated",
+    ]) {
+      expect(listeners.has(event)).toBe(true);
+
+      mockedGetTaskQueue.mockClear();
+      mockedGetMyTasks.mockClear();
+
+      act(() => {
+        listeners.get(event)?.();
+      });
+
+      await waitFor(() => {
+        expect(mockedGetTaskQueue).toHaveBeenCalledTimes(1);
+        expect(mockedGetMyTasks).toHaveBeenCalledTimes(1);
+      });
+    }
+  });
+
+  it("refreshes on reconnect and disconnects on unmount", async () => {
+    const listeners = new Map<string, () => void>();
+
+    const socket = {
+      on: jest.fn((event: string, handler: () => void) => {
+        listeners.set(event, handler);
+      }),
+      off: jest.fn((event: string) => {
+        listeners.delete(event);
+      }),
+      connect: jest.fn(),
+      disconnect: jest.fn(),
+    };
+
+    mockedConnectTaskSocket.mockReturnValue(
+        socket as unknown as Socket,
+    );
+
+    const rendered = renderProvider();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("loading")).toHaveTextContent("ready");
+    });
+
+    mockedGetTaskQueue.mockClear();
+    mockedGetMyTasks.mockClear();
+
+    act(() => {
+      listeners.get("connect")?.();
+    });
+
+    await waitFor(() => {
+      expect(mockedGetTaskQueue).toHaveBeenCalledTimes(1);
+      expect(mockedGetMyTasks).toHaveBeenCalledTimes(1);
+    });
+
+    rendered.unmount();
+
+    expect(socket.disconnect).toHaveBeenCalled();
+    expect(listeners.size).toBe(0);
+  });
+
 });

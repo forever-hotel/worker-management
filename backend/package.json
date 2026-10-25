@@ -22,17 +22,20 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
-    "@nestjs/common": "^12.0.1",
+    "@nestjs/common": "12.2.0",
     "@nestjs/config": "^12.0.0",
     "@nestjs/core": "^12.0.1",
     "@nestjs/jwt": "^12.0.2",
     "@nestjs/platform-express": "^12.0.1",
+    "@nestjs/platform-socket.io": "^12.2.0",
     "@nestjs/schedule": "^12.0.2",
+    "@nestjs/websockets": "^12.2.0",
     "amqplib": "^2.2.0",
     "bcryptjs": "^3.0.3",
     "pg": "^8.23.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "socket.io": "^4.8.4"
   },
   "devDependencies": {
     "@nestjs/cli": "^12.0.0",
@@ -58,7 +61,7 @@
   },
   "overrides": {
     "@nestjs/platform-express": {
-      "multer": "2.4.0"
+      "multer": "2.5.0"
     },
     "@nestjs/mau": {
       "undici": "6.29.1"

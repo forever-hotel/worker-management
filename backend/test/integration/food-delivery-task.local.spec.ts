@@ -320,7 +320,10 @@ localDescribe('DDP-78 KMS food-delivery PostgreSQL integration', () => {
       roomNumber,
     );
 
-    const taskService = new TaskService(new TaskRepository(database));
+    const taskService = new TaskService(
+      new TaskRepository(database),
+      { emitTaskClaimed: () => undefined } as unknown as ConstructorParameters<typeof TaskService>[1],
+    );
 
     const availableTasks = await taskService.getQueue();
 
