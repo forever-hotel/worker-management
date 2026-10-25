@@ -182,7 +182,12 @@ localDescribe('DDP-78 real KMS RabbitMQ integration', () => {
     }
 
     const repository = new FoodDeliveryTaskRepository(database);
-    const handler = new OrderReadyHandler(repository);
+    const handler = new OrderReadyHandler(
+      repository,
+      {
+        emitTaskCreated: () => undefined,
+      } as unknown as ConstructorParameters<typeof OrderReadyHandler>[1],
+    );
 
     const originalHandle = handler.handle.bind(handler);
 

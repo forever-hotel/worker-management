@@ -14,9 +14,10 @@ import {
 import { RabbitMqService } from './rabbitmq/rabbitmq.service';
 import { OrderReadyHandler } from './handlers/order-ready.handler';
 import { OrderReadyConsumer } from './consumers/order-ready.consumer';
+import { RealtimeModule } from '../realtime/realtime.module';
 
 @Module({
-  imports: [ConfigModule],
+  imports: [ConfigModule, RealtimeModule],
   providers: [
     {
       provide: RABBITMQ_CONFIG,

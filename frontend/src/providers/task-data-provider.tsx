@@ -17,6 +17,7 @@ import { getMyTasks, getTaskQueue } from "@/features/tasks/api/tasks.api";
 import type { TaskApiRecord } from "@/features/tasks/types/task-api";
 
 import { ApiError } from "@/lib/api-client";
+import {connectTaskSocket, TASK_SOCKET_EVENTS} from "@/lib/task-socket";
 
 type TaskDataContextValue = {
   queue: TaskApiRecord[];
@@ -157,6 +158,48 @@ export function TaskDataProvider({ children }: TaskDataProviderProps) {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [refreshAll]);
+
+  // DDP-79: Realtime updates from the WKMS backend.
+  useEffect(() => {
+    const socket = connectTaskSocket();
+
+    if (!socket) {
+      return;
+    }
+
+    const refreshTasks = () => {
+      void refreshAll().catch(() => undefined);
+    };
+
+    const handleAuthError = (error: Error) => {
+      if (/auth|token|worker|unauthorized|expired|invalid/i.test(error.message)) {
+        socket.disconnect();
+        router.replace("/login");
+      }
+    };
+
+    // Re-fetch after reconnecting to recover missed events.
+    socket.on("connect", refreshTasks);
+
+    for (const eventName of TASK_SOCKET_EVENTS) {
+      socket.on(eventName, refreshTasks);
+    }
+
+    socket.on("connect_error", handleAuthError);
+
+    socket.connect();
+
+    return () => {
+      socket.off("connect", refreshTasks);
+
+      for (const eventName of TASK_SOCKET_EVENTS) {
+        socket.off(eventName, refreshTasks);
+      }
+
+      socket.off("connect_error", handleAuthError);
+      socket.disconnect();
+    };
+  }, [refreshAll, router]);
 
   const value = useMemo<TaskDataContextValue>(
     () => ({

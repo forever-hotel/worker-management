@@ -7,7 +7,7 @@ const BOOKING_ID = '47f608e3-94d7-4e25-96ad-b32acb45d6e1';
 const TASK_ID = '9e2cc9c6-8933-4de5-b40d-dc9cd12950c6';
 
 function validEvent() {
-  return {
+    return {
     eventId: `checkout:${BOOKING_ID}`,
     eventType: 'checkout.completed',
     eventVersion: 1,
@@ -31,15 +31,25 @@ function createContext() {
     createCheckoutCleaningTask,
   } as unknown as CheckoutTaskRepository;
 
+  // DDP79_REALTIME_MOCK
+  const emitTaskCreated = jest.fn<(taskId: string) => void>();
+  const realtimeGateway = {
+    emitTaskCreated,
+  } as unknown as ConstructorParameters<typeof CheckoutCompletedHandler>[1];
   return {
-    handler: new CheckoutCompletedHandler(repository),
+    handler: new CheckoutCompletedHandler(
+      repository,
+      realtimeGateway,
+    ),
+    emitTaskCreated,
     createCheckoutCleaningTask,
   };
 }
 
 describe('CheckoutCompletedHandler', () => {
   it('creates a cleaning task from a valid FDS event', async () => {
-    const { handler, createCheckoutCleaningTask } = createContext();
+    const { handler, createCheckoutCleaningTask, emitTaskCreated } =
+      createContext();
 
     createCheckoutCleaningTask.mockResolvedValue({
       status: 'CREATED',
@@ -59,10 +69,13 @@ describe('CheckoutCompletedHandler', () => {
     );
 
     expect(createCheckoutCleaningTask).toHaveBeenCalledTimes(1);
+    expect(emitTaskCreated).toHaveBeenCalledTimes(1);
+    expect(emitTaskCreated).toHaveBeenCalledWith(TASK_ID);
   });
 
   it('treats an existing cleaning task as successfully processed', async () => {
-    const { handler, createCheckoutCleaningTask } = createContext();
+    const { handler, createCheckoutCleaningTask, emitTaskCreated } =
+      createContext();
 
     createCheckoutCleaningTask.mockResolvedValue({
       status: 'EXISTS',
@@ -75,6 +88,7 @@ describe('CheckoutCompletedHandler', () => {
     });
 
     expect(createCheckoutCleaningTask).toHaveBeenCalledTimes(1);
+    expect(emitTaskCreated).not.toHaveBeenCalled();
   });
 
   it('rejects malformed messages before database access', async () => {
@@ -114,7 +128,8 @@ describe('CheckoutCompletedHandler', () => {
   });
 
   it('propagates database failures for RabbitMQ retry handling', async () => {
-    const { handler, createCheckoutCleaningTask } = createContext();
+    const { handler, createCheckoutCleaningTask, emitTaskCreated } =
+      createContext();
 
     createCheckoutCleaningTask.mockRejectedValue(
       new Error('Simulated PostgreSQL failure'),
@@ -125,5 +140,6 @@ describe('CheckoutCompletedHandler', () => {
     );
 
     expect(createCheckoutCleaningTask).toHaveBeenCalledTimes(1);
+    expect(emitTaskCreated).not.toHaveBeenCalled();
   });
 });

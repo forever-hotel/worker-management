@@ -8,6 +8,7 @@ import { WorkerRoleGuard } from '../../src/auth/guards/worker-role.guard';
 import { TaskRepository } from '../../src/database/repositories/task.repository';
 import { TaskController } from '../../src/tasks/task.controller';
 import { TaskService } from '../../src/tasks/task.service';
+import { WkmsRealtimeGateway } from '../../src/realtime/wkms-realtime.gateway';
 
 type FindAllMock = () => Promise<unknown[]>;
 
@@ -52,36 +53,39 @@ describe('TaskController integration', () => {
       jest.fn<TaskActionMock>();
 
   beforeAll(async () => {
-    const moduleRef =
-        await Test.createTestingModule({
-          imports: [
-            JwtModule.register({
-              secret: TEST_JWT_SECRET,
-              signOptions: {
-                expiresIn: 28_800,
-              },
-            }),
-          ],
-          controllers: [
-            TaskController,
-          ],
-          providers: [
-            TaskService,
-            JwtAuthGuard,
-            WorkerRoleGuard,
-            {
-              provide: TaskRepository,
-              useValue: {
-                findAll,
-                findMyActiveTasks,
-                findById,
-                claimTask,
-                startTask,
-                completeTask,
-              },
-            },
-          ],
-        }).compile();
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        JwtModule.register({
+          secret: TEST_JWT_SECRET,
+          signOptions: {
+            expiresIn: 28_800,
+          },
+        }),
+      ],
+      controllers: [TaskController],
+      providers: [
+        TaskService,
+        JwtAuthGuard,
+        WorkerRoleGuard,
+        {
+          provide: WkmsRealtimeGateway,
+          useValue: {
+            emitTaskClaimed: jest.fn(),
+          },
+        },
+        {
+          provide: TaskRepository,
+          useValue: {
+            findAll,
+            findMyActiveTasks,
+            findById,
+            claimTask,
+            startTask,
+            completeTask,
+          },
+        },
+      ],
+    }).compile();
 
     app =
         moduleRef.createNestApplication();
@@ -251,7 +255,9 @@ describe('TaskController integration', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
   });
 
   function createWorkerToken(
