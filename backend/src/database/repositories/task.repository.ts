@@ -1,9 +1,11 @@
+
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database.service';
 import {
   TaskEscalationCategory,
   TaskEscalationPriority,
 } from '../../messaging/contracts/task-escalated.event';
+import { appendTaskAudit } from './task-audit.repository';
 
 export type CompletedTaskSummaryRecord = {
   task_id: string;
@@ -21,9 +23,9 @@ export class TaskRepository {
   async findAll() {
     const result = await this.databaseService.query(
       `SELECT *
-             FROM wkms_tasks
-             WHERE status IN ($1, $2)
-             ORDER BY submitted_at ASC`,
+       FROM wkms_tasks
+       WHERE status IN ($1, $2)
+       ORDER BY submitted_at ASC`,
       ['UNASSIGNED', 'ESCALATED'],
     );
 
@@ -46,8 +48,8 @@ export class TaskRepository {
   async findById(taskId: string) {
     const result = await this.databaseService.query(
       `SELECT *
-     FROM wkms_tasks
-     WHERE task_id = $1`,
+       FROM wkms_tasks
+       WHERE task_id = $1`,
       [taskId],
     );
 
@@ -68,9 +70,9 @@ export class TaskRepository {
             updated_at = NOW()
         WHERE status = $2
           AND submitted_at <= NOW() - INTERVAL '15 minutes'
-          RETURNING *
-          ),
-          stored_events AS (
+        RETURNING *
+      ),
+      stored_events AS (
         INSERT INTO wkms_event_outbox (
           event_id,
           task_id,
@@ -84,34 +86,62 @@ export class TaskRepository {
           'task.escalated',
           'wkms.task.escalated.v1',
           jsonb_build_object(
-          'eventId', 'escalation:' || task_id::text,
-          'eventType', 'task.escalated',
-          'eventVersion', 1,
-          'occurredAt',
-          to_char(
-          updated_at AT TIME ZONE 'UTC',
-          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
-          ),
-          'source', 'worker-management',
-          'data', jsonb_build_object(
-          'taskId', task_id::text,
-          'taskCategory', category::text,
-          'roomNumber', room_number,
-          'priority', priority::text,
-          'escalatedAt',
-          to_char(
-          updated_at AT TIME ZONE 'UTC',
-          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
-          )
-          )
+            'eventId', 'escalation:' || task_id::text,
+            'eventType', 'task.escalated',
+            'eventVersion', 1,
+            'occurredAt',
+            to_char(
+              updated_at AT TIME ZONE 'UTC',
+              'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+            ),
+            'source', 'worker-management',
+            'data', jsonb_build_object(
+              'taskId', task_id::text,
+              'taskCategory', category::text,
+              'roomNumber', room_number,
+              'priority', priority::text,
+              'escalatedAt',
+              to_char(
+                updated_at AT TIME ZONE 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+              )
+            )
           )
         FROM newly_escalated
-          RETURNING task_id
+        RETURNING task_id
+      ),
+      audited_events AS (
+        INSERT INTO audit_logs (
+          event_category,
+          actor_type,
+          action,
+          entity_type,
+          entity_id,
+          details
+        )
+        SELECT
+          'TASK_SERVICE',
+          'SYSTEM',
+          'TASK_ESCALATED',
+          'WKMS_TASK',
+          e.task_id::text,
+          jsonb_build_object(
+            'previousStatus', 'UNASSIGNED',
+            'newStatus', 'ESCALATED',
+            'previousWorkerId', NULL,
+            'newWorkerId', NULL
           )
-        SELECT e.*
         FROM newly_escalated AS e
-               JOIN stored_events AS s
-                    ON s.task_id = e.task_id`,
+        JOIN stored_events AS s
+          ON s.task_id = e.task_id
+        RETURNING entity_id
+      )
+      SELECT e.*
+      FROM newly_escalated AS e
+      JOIN stored_events AS s
+        ON s.task_id = e.task_id
+      JOIN audited_events AS a
+        ON a.entity_id = e.task_id::text`,
       ['ESCALATED', 'UNASSIGNED'],
     );
 
@@ -123,9 +153,9 @@ export class TaskRepository {
       count: number;
     }>(
       `SELECT COUNT(*)::int AS count
-           FROM wkms_tasks
-           WHERE assigned_worker_id = $1
-             AND status IN ($2, $3)`,
+       FROM wkms_tasks
+       WHERE assigned_worker_id = $1
+         AND status IN ($2, $3)`,
       [workerId, 'ASSIGNED', 'IN_PROGRESS'],
     );
 
@@ -137,9 +167,9 @@ export class TaskRepository {
       count: number;
     }>(
       `SELECT COUNT(*)::int AS count
-           FROM wkms_tasks
-           WHERE status = $1
-             AND assigned_worker_id IS NULL`,
+       FROM wkms_tasks
+       WHERE status = $1
+         AND assigned_worker_id IS NULL`,
       ['ESCALATED'],
     );
 
@@ -153,18 +183,18 @@ export class TaskRepository {
   ): Promise<CompletedTaskSummaryRecord[]> {
     const result = await this.databaseService.query<CompletedTaskSummaryRecord>(
       `SELECT
-                   task_id,
-                   room_number,
-                   category,
-                   priority,
-                   submitted_at,
-                   completed_at
-               FROM wkms_tasks
-               WHERE assigned_worker_id = $1
-                 AND status = $2
-                 AND completed_at >= $3
-                 AND completed_at < $4
-               ORDER BY completed_at DESC`,
+         task_id,
+         room_number,
+         category,
+         priority,
+         submitted_at,
+         completed_at
+       FROM wkms_tasks
+       WHERE assigned_worker_id = $1
+         AND status = $2
+         AND completed_at >= $3
+         AND completed_at < $4
+       ORDER BY completed_at DESC`,
       [workerId, 'COMPLETED', startAt, endAt],
     );
 
@@ -195,7 +225,9 @@ export class TaskRepository {
         [workerId, 'ASSIGNED', 'IN_PROGRESS'],
       );
 
-      const activeTaskCount = Number(activeTasksResult.rows[0].count);
+      const activeTaskCount = Number(
+        activeTasksResult.rows[0].count,
+      );
 
       if (activeTaskCount >= 3) {
         throw new Error('ACTIVE_TASK_LIMIT_REACHED');
@@ -215,7 +247,10 @@ export class TaskRepository {
 
       const taskStatus = taskResult.rows[0].status;
 
-      if (taskStatus !== 'UNASSIGNED' && taskStatus !== 'ESCALATED') {
+      if (
+        taskStatus !== 'UNASSIGNED' &&
+        taskStatus !== 'ESCALATED'
+      ) {
         throw new Error('TASK_NOT_AVAILABLE');
       }
 
@@ -229,6 +264,19 @@ export class TaskRepository {
         ['ASSIGNED', workerId, taskId],
       );
 
+      await appendTaskAudit(client, {
+        taskId,
+        action: 'TASK_CLAIMED',
+        actor: {
+          type: 'STAFF',
+          workerId,
+        },
+        previousStatus: taskStatus,
+        newStatus: 'ASSIGNED',
+        previousWorkerId: null,
+        newWorkerId: workerId,
+      });
+
       return updateResult.rows[0];
     });
   }
@@ -237,12 +285,12 @@ export class TaskRepository {
     return this.databaseService.withTransaction(async (client) => {
       const taskResult = await client.query(
         `SELECT
-             task_id,
-             status,
-             assigned_worker_id
-           FROM wkms_tasks
-           WHERE task_id = $1
-           FOR UPDATE`,
+           task_id,
+           status,
+           assigned_worker_id
+         FROM wkms_tasks
+         WHERE task_id = $1
+         FOR UPDATE`,
         [taskId],
       );
 
@@ -262,12 +310,25 @@ export class TaskRepository {
 
       const updateResult = await client.query(
         `UPDATE wkms_tasks
-             SET status = $1,
-                 updated_at = NOW()
-             WHERE task_id = $2
-             RETURNING *`,
+         SET status = $1,
+             updated_at = NOW()
+         WHERE task_id = $2
+         RETURNING *`,
         ['IN_PROGRESS', taskId],
       );
+
+      await appendTaskAudit(client, {
+        taskId,
+        action: 'TASK_STARTED',
+        actor: {
+          type: 'STAFF',
+          workerId,
+        },
+        previousStatus: task.status,
+        newStatus: 'IN_PROGRESS',
+        previousWorkerId: workerId,
+        newWorkerId: workerId,
+      });
 
       return updateResult.rows[0];
     });
@@ -277,12 +338,12 @@ export class TaskRepository {
     return this.databaseService.withTransaction(async (client) => {
       const taskResult = await client.query(
         `SELECT
-             task_id,
-             status,
-             assigned_worker_id
-           FROM wkms_tasks
-           WHERE task_id = $1
-           FOR UPDATE`,
+           task_id,
+           status,
+           assigned_worker_id
+         FROM wkms_tasks
+         WHERE task_id = $1
+         FOR UPDATE`,
         [taskId],
       );
 
@@ -302,13 +363,26 @@ export class TaskRepository {
 
       const updateResult = await client.query(
         `UPDATE wkms_tasks
-             SET status = $1,
-                 completed_at = NOW(),
-                 updated_at = NOW()
-             WHERE task_id = $2
-             RETURNING *`,
+         SET status = $1,
+             completed_at = NOW(),
+             updated_at = NOW()
+         WHERE task_id = $2
+         RETURNING *`,
         ['COMPLETED', taskId],
       );
+
+      await appendTaskAudit(client, {
+        taskId,
+        action: 'TASK_COMPLETED',
+        actor: {
+          type: 'STAFF',
+          workerId,
+        },
+        previousStatus: task.status,
+        newStatus: 'COMPLETED',
+        previousWorkerId: workerId,
+        newWorkerId: workerId,
+      });
 
       return updateResult.rows[0];
     });

@@ -104,7 +104,11 @@ describe('TaskRepository', () => {
       assigned_worker_id: 'worker-1',
     });
 
-    expect(query).toHaveBeenCalledTimes(4);
+    expect(query).toHaveBeenCalledTimes(5);
+
+    expect(query.mock.calls[4][0]).toContain(
+      'INSERT INTO audit_logs',
+    );
   });
 
   it('should reject a claim when worker already has three active tasks', async () => {
@@ -274,7 +278,11 @@ describe('TaskRepository', () => {
       assigned_worker_id: 'worker-1',
     });
 
-    expect(query).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenCalledTimes(3);
+
+    expect(query.mock.calls[2][0]).toContain(
+      'INSERT INTO audit_logs',
+    );
   });
 
   it('should reject starting a task owned by another worker', async () => {
@@ -359,7 +367,11 @@ describe('TaskRepository', () => {
 
     expect(result).toHaveProperty('completed_at');
 
-    expect(query).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenCalledTimes(3);
+
+    expect(query.mock.calls[2][0]).toContain(
+      'INSERT INTO audit_logs',
+    );
   });
 
   it('should reject completing a task owned by another worker', async () => {
@@ -590,7 +602,11 @@ describe('TaskRepository', () => {
       assigned_worker_id: 'worker-1',
     });
 
-    expect(query).toHaveBeenCalledTimes(4);
+    expect(query).toHaveBeenCalledTimes(5);
+
+    expect(query.mock.calls[4][0]).toContain(
+      'INSERT INTO audit_logs',
+    );
 
     expect(query).toHaveBeenNthCalledWith(
       3,
