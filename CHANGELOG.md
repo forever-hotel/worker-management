@@ -7,6 +7,9 @@
 - DDP-78: Consume FDS checkout-completed events to create high-priority cleaning tasks.
 - DDP-78: Add RabbitMQ retry, dead-letter, reconnection, and idempotency handling.
 - DDP-78: Add local PostgreSQL and RabbitMQ integration tests.
+- DDP-194: Add the WKMS PWA manifest and 192x192/512x512 application icons.
+- DDP-194: Enable desktop installation and standalone launch with the existing hotel color palette.
+- DDP-194: Add automated PWA manifest tests and preserve existing frontend behavior.
 
 ### Documentation
 - Document inbound event contracts; the KMS contract remains proposed pending approval.
