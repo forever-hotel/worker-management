@@ -97,14 +97,44 @@ describe('validateEnvironment', () => {
     });
 
     it('should reject a non-positive JWT expiry', () => {
-        expect(() =>
-            validateEnvironment({
-                DATABASE_URL: 'postgresql://localhost:5432/wkms',
-                JWT_SECRET: VALID_SECRET,
-                JWT_EXPIRES_IN_SECONDS: '0',
-            }),
-        ).toThrow(
-            'JWT_EXPIRES_IN_SECONDS must be a positive integer',
-        );
+      expect(() =>
+        validateEnvironment({
+          DATABASE_URL: 'postgresql://localhost:5432/wkms',
+          JWT_SECRET: VALID_SECRET,
+          JWT_EXPIRES_IN_SECONDS: '0',
+        }),
+      ).toThrow('JWT_EXPIRES_IN_SECONDS must be a positive integer');
+    });
+
+    it('accepts a valid Front Desk service credential', () => {
+      const config = {
+        DATABASE_URL: 'postgresql://localhost:5432/wkms',
+        JWT_SECRET: VALID_SECRET,
+        FDS_WKMS_SERVICE_TOKEN:
+          'valid-front-desk-service-token-with-32-plus-characters',
+      };
+
+      expect(validateEnvironment(config)).toMatchObject({
+        FDS_WKMS_SERVICE_TOKEN: config.FDS_WKMS_SERVICE_TOKEN,
+      });
+    });
+
+    it('rejects a short Front Desk service credential', () => {
+      expect(() =>
+        validateEnvironment({
+          DATABASE_URL: 'postgresql://localhost:5432/wkms',
+          JWT_SECRET: VALID_SECRET,
+          FDS_WKMS_SERVICE_TOKEN: 'short-token',
+        }),
+      ).toThrow('FDS_WKMS_SERVICE_TOKEN must contain at least 32 characters');
+    });
+
+    it('allows WKMS to run without Front Desk integration', () => {
+      expect(() =>
+        validateEnvironment({
+          DATABASE_URL: 'postgresql://localhost:5432/wkms',
+          JWT_SECRET: VALID_SECRET,
+        }),
+      ).not.toThrow();
     });
 });

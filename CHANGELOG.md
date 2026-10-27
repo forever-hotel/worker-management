@@ -12,6 +12,8 @@
 - DDP-194: Add automated PWA manifest tests and preserve existing frontend behavior.
 - DDP-197: Added durable task completion events using the PostgreSQL transactional outbox and RabbitMQ.
 - DDP-197: Added completion event contract documentation, idempotency tests, and transaction rollback tests.
+- DDP-198: Add authenticated Front Desk manual task assignment API with worker validation, active-task limits, transactional audit, and realtime notification.
+- DDP-198: Add service authentication, assignment, rollback, and HTTP authorization tests.
 
 ### Documentation
 - Document inbound event contracts; the KMS contract remains proposed pending approval.

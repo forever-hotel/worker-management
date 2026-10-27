@@ -82,6 +82,50 @@ export class TaskService {
     }
   }
 
+
+  async manuallyAssignTask(taskId: string, workerId: string) {
+    try {
+      const assignedTask =
+        await this.taskRepository.manuallyAssignTask(
+          taskId,
+          workerId,
+        );
+
+      // Broadcast only after the transaction has committed.
+      // Reuse the existing task.claimed refresh event.
+      this.realtimeGateway.emitTaskClaimed(taskId);
+
+      return assignedTask;
+    } catch (error) {
+      if (!(error instanceof Error)) {
+        throw error;
+      }
+
+      switch (error.message) {
+        case 'WORKER_NOT_FOUND_OR_INACTIVE':
+          throw new NotFoundException(
+            'Worker not found or inactive',
+          );
+
+        case 'TASK_NOT_FOUND':
+          throw new NotFoundException('Task not found');
+
+        case 'ACTIVE_TASK_LIMIT_REACHED':
+          throw new ConflictException(
+            'Worker already has the maximum of three active tasks',
+          );
+
+        case 'TASK_NOT_AVAILABLE':
+          throw new ConflictException(
+            'Task is no longer available for assignment',
+          );
+
+        default:
+          throw error;
+      }
+    }
+  }
+
   async startTask(taskId: string, workerId: string) {
     try {
       return await this.taskRepository.startTask(taskId, workerId);
