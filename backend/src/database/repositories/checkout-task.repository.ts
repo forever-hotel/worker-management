@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database.service';
+import { appendTaskAudit } from './task-audit.repository';
 
 export type CheckoutTaskCreationResult = {
   status: 'CREATED' | 'EXISTS';
@@ -31,7 +32,7 @@ export class CheckoutTaskRepository {
 
     return this.databaseService.withTransaction(async (client) => {
       // Serialize checkout-task creation for the same booking.
-      // Transaction-scoped locks are released on COMMIT or ROLLBACK.
+      // Locks are released on COMMIT or ROLLBACK.
       await client.query(
         `SELECT pg_advisory_xact_lock(
            hashtext($1::text),
@@ -40,14 +41,14 @@ export class CheckoutTaskRepository {
         ['wkms.checkout-cleaning.v1', canonicalBookingId],
       );
 
-      // A redelivered event must not create another task.
+      // Redelivered events must not create duplicate tasks or audits.
       const existing = await client.query<ExistingCheckoutTaskRow>(
         `SELECT task_id, room_number
          FROM wkms_tasks
          WHERE source = 'CHECKOUT_TRIGGER'
            AND booking_id = $1::uuid
          ORDER BY created_at ASC, task_id ASC
-         LIMIT 1`,
+           LIMIT 1`,
         [canonicalBookingId],
       );
 
@@ -64,7 +65,7 @@ export class CheckoutTaskRepository {
         };
       }
 
-      // Read-only verification of the authoritative booking state.
+      // Verify the authoritative Front Desk booking state.
       const booking = await client.query<BookingRow>(
         `SELECT booking_id
          FROM bookings
@@ -80,22 +81,22 @@ export class CheckoutTaskRepository {
 
       const inserted = await client.query<CreatedTaskRow>(
         `INSERT INTO wkms_tasks (
-           room_number,
-           category,
-           priority,
-           status,
-           source,
-           booking_id
-         )
+          room_number,
+          category,
+          priority,
+          status,
+          source,
+          booking_id
+        )
          VALUES (
-           $1,
-           'ROOM_CLEANING',
-           'HIGH',
-           'UNASSIGNED',
-           'CHECKOUT_TRIGGER',
-           $2::uuid
-         )
-         RETURNING task_id`,
+                  $1,
+                  'ROOM_CLEANING',
+                  'HIGH',
+                  'UNASSIGNED',
+                  'CHECKOUT_TRIGGER',
+                  $2::uuid
+                )
+           RETURNING task_id`,
         [roomNumber, canonicalBookingId],
       );
 
@@ -104,6 +105,19 @@ export class CheckoutTaskRepository {
       if (!createdTask) {
         throw new Error('CHECKOUT_TASK_INSERT_FAILED');
       }
+
+      // The task and its audit must commit together.
+      await appendTaskAudit(client, {
+        taskId: createdTask.task_id,
+        action: 'TASK_CREATED',
+        actor: {
+          type: 'SYSTEM',
+        },
+        previousStatus: null,
+        newStatus: 'UNASSIGNED',
+        previousWorkerId: null,
+        newWorkerId: null,
+      });
 
       return {
         status: 'CREATED',

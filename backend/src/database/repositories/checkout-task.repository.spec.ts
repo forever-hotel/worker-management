@@ -55,7 +55,11 @@ describe('CheckoutTaskRepository', () => {
       taskId: TASK_ID,
     });
 
-    expect(query).toHaveBeenCalledTimes(4);
+    expect(query).toHaveBeenCalledTimes(5);
+
+    expect(query.mock.calls[4][0]).toContain(
+      'INSERT INTO audit_logs',
+    );
 
     expect(query.mock.calls[0][0]).toContain('pg_advisory_xact_lock');
 

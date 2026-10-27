@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database.service';
+import { appendTaskAudit } from './task-audit.repository';
 
 type FoodDeliveryTaskResult = {
   status: 'CREATED' | 'EXISTS';
@@ -40,6 +41,7 @@ export class FoodDeliveryTaskRepository {
         };
       }
 
+      // Verify the authoritative Kitchen Management order state.
       const order = await client.query<{ order_id: string }>(
         `SELECT order_id
          FROM kms_food_orders
@@ -55,30 +57,45 @@ export class FoodDeliveryTaskRepository {
 
       const inserted = await client.query<{ task_id: string }>(
         `INSERT INTO wkms_tasks (
-           room_number,
-           category,
-           priority,
-           status,
-           source,
-           food_order_id
-         )
+          room_number,
+          category,
+          priority,
+          status,
+          source,
+          food_order_id
+        )
          VALUES (
-           $1,
-           'FOOD_DELIVERY',
-           'NORMAL',
-           'UNASSIGNED',
-           'KMS',
-           $2::uuid
-         )
-         ON CONFLICT (food_order_id) DO NOTHING
+                  $1,
+                  'FOOD_DELIVERY',
+                  'NORMAL',
+                  'UNASSIGNED',
+                  'KMS',
+                  $2::uuid
+                )
+           ON CONFLICT (food_order_id) DO NOTHING
          RETURNING task_id`,
         [roomNumber, canonicalOrderId],
       );
 
       if (inserted.rows[0]) {
+        const createdTaskId = inserted.rows[0].task_id;
+
+        // Audit only genuinely new tasks, inside this transaction.
+        await appendTaskAudit(client, {
+          taskId: createdTaskId,
+          action: 'TASK_CREATED',
+          actor: {
+            type: 'SYSTEM',
+          },
+          previousStatus: null,
+          newStatus: 'UNASSIGNED',
+          previousWorkerId: null,
+          newWorkerId: null,
+        });
+
         return {
           status: 'CREATED',
-          taskId: inserted.rows[0].task_id,
+          taskId: createdTaskId,
         };
       }
 
@@ -98,6 +115,7 @@ export class FoodDeliveryTaskRepository {
         throw new Error('FOOD_DELIVERY_TASK_ROOM_CONFLICT');
       }
 
+      // Existing tasks must not create repeated creation audits.
       return {
         status: 'EXISTS',
         taskId: concurrent.rows[0].task_id,

@@ -75,7 +75,11 @@ describe('FoodDeliveryTaskRepository', () => {
     expect(insertSql).toContain("'UNASSIGNED'");
     expect(insertSql).toContain("'KMS'");
 
-    expect(query).toHaveBeenCalledTimes(3);
+    expect(query).toHaveBeenCalledTimes(4);
+
+    expect(query.mock.calls[3][0]).toContain(
+      'INSERT INTO audit_logs',
+    );
   });
 
   it('does not recreate an existing food-delivery task', async () => {
