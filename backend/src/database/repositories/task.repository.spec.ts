@@ -350,6 +350,9 @@ describe('TaskRepository', () => {
             task_id: 'task-1',
             status: 'COMPLETED',
             assigned_worker_id: 'worker-1',
+            category: 'ROOM_CLEANING',
+            room_number: 'DEMO101',
+            priority: 'HIGH',
             completed_at: '2026-10-02T12:00:00.000Z',
           },
         ],
@@ -367,7 +370,7 @@ describe('TaskRepository', () => {
 
     expect(result).toHaveProperty('completed_at');
 
-    expect(query).toHaveBeenCalledTimes(3);
+    expect(query).toHaveBeenCalledTimes(4);
 
     expect(query.mock.calls[2][0]).toContain(
       'INSERT INTO audit_logs',

@@ -10,6 +10,8 @@
 - DDP-194: Add the WKMS PWA manifest and 192x192/512x512 application icons.
 - DDP-194: Enable desktop installation and standalone launch with the existing hotel color palette.
 - DDP-194: Add automated PWA manifest tests and preserve existing frontend behavior.
+- DDP-197: Added durable task completion events using the PostgreSQL transactional outbox and RabbitMQ.
+- DDP-197: Added completion event contract documentation, idempotency tests, and transaction rollback tests.
 
 ### Documentation
 - Document inbound event contracts; the KMS contract remains proposed pending approval.
