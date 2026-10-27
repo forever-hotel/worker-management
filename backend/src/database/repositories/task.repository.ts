@@ -281,6 +281,104 @@ export class TaskRepository {
     });
   }
 
+
+  async manuallyAssignTask(taskId: string, workerId: string) {
+    return this.databaseService.withTransaction(async (client) => {
+      // Lock the worker first, matching the existing claimTask lock order.
+      // This serializes concurrent assignments to the same worker.
+      const workerResult = await client.query(
+        `SELECT worker_id
+         FROM staff_users
+         WHERE worker_id = $1
+           AND role = 'WORKER'
+           AND is_active = TRUE
+         FOR UPDATE`,
+        [workerId],
+      );
+
+      if (workerResult.rowCount === 0) {
+        throw new Error('WORKER_NOT_FOUND_OR_INACTIVE');
+      }
+
+      // The row lock above protects this active-task count against
+      // other assignments using the same worker-locking protocol.
+      const activeTasksResult = await client.query(
+        `SELECT COUNT(*)::int AS count
+         FROM wkms_tasks
+         WHERE assigned_worker_id = $1
+           AND status IN ('ASSIGNED', 'IN_PROGRESS')`,
+        [workerId],
+      );
+
+      const activeCount = Number(
+        activeTasksResult.rows[0]?.count ?? 0,
+      );
+
+      if (activeCount >= 3) {
+        throw new Error('ACTIVE_TASK_LIMIT_REACHED');
+      }
+
+      // Lock the task to prevent a concurrent worker claim or
+      // another manual assignment from changing its ownership.
+      const taskResult = await client.query(
+        `SELECT task_id, status, assigned_worker_id
+         FROM wkms_tasks
+         WHERE task_id = $1
+         FOR UPDATE`,
+        [taskId],
+      );
+
+      if (taskResult.rowCount === 0) {
+        throw new Error('TASK_NOT_FOUND');
+      }
+
+      const task = taskResult.rows[0];
+
+      if (
+        (task.status !== 'UNASSIGNED' &&
+          task.status !== 'ESCALATED') ||
+        task.assigned_worker_id !== null
+      ) {
+        throw new Error('TASK_NOT_AVAILABLE');
+      }
+
+      const updateResult = await client.query(
+        `UPDATE wkms_tasks
+         SET status = 'ASSIGNED',
+             assigned_worker_id = $1,
+             updated_at = NOW()
+         WHERE task_id = $2
+           AND status IN ('UNASSIGNED', 'ESCALATED')
+           AND assigned_worker_id IS NULL
+         RETURNING *`,
+        [workerId, taskId],
+      );
+
+      const assignedTask = updateResult.rows[0];
+
+      if (!assignedTask) {
+        throw new Error('TASK_NOT_AVAILABLE');
+      }
+
+      // The trusted FDS backend initiates this action.
+      // SYSTEM records a service-originated assignment,
+      // not a claim that the target worker performed it.
+      await appendTaskAudit(client, {
+        taskId,
+        action: 'TASK_MANUALLY_ASSIGNED',
+        actor: { type: 'SYSTEM' },
+        previousStatus: task.status,
+        newStatus: 'ASSIGNED',
+        previousWorkerId: null,
+        newWorkerId: workerId,
+      });
+
+      // Transaction commits only when assignment and audit succeed.
+      return assignedTask;
+    });
+  }
+
+
   async startTask(taskId: string, workerId: string) {
     return this.databaseService.withTransaction(async (client) => {
       const taskResult = await client.query(

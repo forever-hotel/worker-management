@@ -36,13 +36,22 @@ export function validateEnvironment(
             ] ?? DEFAULT_JWT_EXPIRES_IN_SECONDS,
     );
 
+    if (!Number.isInteger(expiresInSeconds) || expiresInSeconds <= 0) {
+      throw new Error('JWT_EXPIRES_IN_SECONDS must be a positive integer');
+    }
+
+    const frontDeskServiceToken = config.FDS_WKMS_SERVICE_TOKEN;
+
     if (
-        !Number.isInteger(expiresInSeconds) ||
-        expiresInSeconds <= 0
+      frontDeskServiceToken !== undefined &&
+      frontDeskServiceToken !== null &&
+      frontDeskServiceToken !== '' &&
+      (typeof frontDeskServiceToken !== 'string' ||
+        frontDeskServiceToken.length < 32)
     ) {
-        throw new Error(
-            'JWT_EXPIRES_IN_SECONDS must be a positive integer',
-        );
+      throw new Error(
+        'FDS_WKMS_SERVICE_TOKEN must contain at least 32 characters when configured',
+      );
     }
 
     return {
