@@ -1,10 +1,15 @@
-
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database.service';
 import {
   TaskEscalationCategory,
   TaskEscalationPriority,
 } from '../../messaging/contracts/task-escalated.event';
+import {
+  MESSAGE_EVENT_TYPES,
+  MESSAGE_EVENT_VERSIONS,
+  MESSAGE_SOURCES,
+  RABBITMQ_TOPOLOGY,
+} from '../../messaging/messaging.constants';
 import { appendTaskAudit } from './task-audit.repository';
 
 export type CompletedTaskSummaryRecord = {
@@ -65,83 +70,83 @@ export class TaskRepository {
       updated_at: Date | string;
     }>(
       `WITH newly_escalated AS (
-        UPDATE wkms_tasks
-        SET status = $1,
-            updated_at = NOW()
-        WHERE status = $2
-          AND submitted_at <= NOW() - INTERVAL '15 minutes'
+      UPDATE wkms_tasks
+      SET status = $1,
+          updated_at = NOW()
+      WHERE status = $2
+        AND submitted_at <= NOW() - INTERVAL '15 minutes'
         RETURNING *
-      ),
-      stored_events AS (
-        INSERT INTO wkms_event_outbox (
-          event_id,
-          task_id,
-          event_type,
-          routing_key,
-          payload
-        )
-        SELECT
-          'escalation:' || task_id::text,
-          task_id,
-          'task.escalated',
-          'wkms.task.escalated.v1',
-          jsonb_build_object(
-            'eventId', 'escalation:' || task_id::text,
-            'eventType', 'task.escalated',
-            'eventVersion', 1,
-            'occurredAt',
-            to_char(
-              updated_at AT TIME ZONE 'UTC',
-              'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
-            ),
-            'source', 'worker-management',
-            'data', jsonb_build_object(
-              'taskId', task_id::text,
-              'taskCategory', category::text,
-              'roomNumber', room_number,
-              'priority', priority::text,
-              'escalatedAt',
-              to_char(
-                updated_at AT TIME ZONE 'UTC',
-                'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
-              )
-            )
-          )
-        FROM newly_escalated
-        RETURNING task_id
-      ),
-      audited_events AS (
-        INSERT INTO audit_logs (
-          event_category,
-          actor_type,
-          action,
-          entity_type,
-          entity_id,
-          details
-        )
-        SELECT
-          'TASK_SERVICE',
-          'SYSTEM',
-          'TASK_ESCALATED',
-          'WKMS_TASK',
-          e.task_id::text,
-          jsonb_build_object(
-            'previousStatus', 'UNASSIGNED',
-            'newStatus', 'ESCALATED',
-            'previousWorkerId', NULL,
-            'newWorkerId', NULL
-          )
-        FROM newly_escalated AS e
-        JOIN stored_events AS s
-          ON s.task_id = e.task_id
-        RETURNING entity_id
+        ),
+        stored_events AS (
+      INSERT INTO wkms_event_outbox (
+        event_id,
+        task_id,
+        event_type,
+        routing_key,
+        payload
       )
+      SELECT
+        'escalation:' || task_id::text,
+        task_id,
+        'task.escalated',
+        'wkms.task.escalated.v1',
+        jsonb_build_object(
+        'eventId', 'escalation:' || task_id::text,
+        'eventType', 'task.escalated',
+        'eventVersion', 1,
+        'occurredAt',
+        to_char(
+        updated_at AT TIME ZONE 'UTC',
+        'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+        ),
+        'source', 'worker-management',
+        'data', jsonb_build_object(
+        'taskId', task_id::text,
+        'taskCategory', category::text,
+        'roomNumber', room_number,
+        'priority', priority::text,
+        'escalatedAt',
+        to_char(
+        updated_at AT TIME ZONE 'UTC',
+        'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+        )
+        )
+        )
+      FROM newly_escalated
+        RETURNING task_id
+        ),
+        audited_events AS (
+      INSERT INTO audit_logs (
+        event_category,
+        actor_type,
+        action,
+        entity_type,
+        entity_id,
+        details
+      )
+      SELECT
+        'TASK_SERVICE',
+        'SYSTEM',
+        'TASK_ESCALATED',
+        'WKMS_TASK',
+        e.task_id::text,
+        jsonb_build_object(
+        'previousStatus', 'UNASSIGNED',
+        'newStatus', 'ESCALATED',
+        'previousWorkerId', NULL,
+        'newWorkerId', NULL
+        )
+      FROM newly_escalated AS e
+        JOIN stored_events AS s
+      ON s.task_id = e.task_id
+        RETURNING entity_id
+        )
       SELECT e.*
       FROM newly_escalated AS e
-      JOIN stored_events AS s
-        ON s.task_id = e.task_id
-      JOIN audited_events AS a
-        ON a.entity_id = e.task_id::text`,
+             JOIN stored_events AS s
+                  ON s.task_id = e.task_id
+             JOIN audited_events AS a
+                  ON a.entity_id = e.task_id::text`,
       ['ESCALATED', 'UNASSIGNED'],
     );
 
@@ -183,18 +188,18 @@ export class TaskRepository {
   ): Promise<CompletedTaskSummaryRecord[]> {
     const result = await this.databaseService.query<CompletedTaskSummaryRecord>(
       `SELECT
-         task_id,
-         room_number,
-         category,
-         priority,
-         submitted_at,
-         completed_at
-       FROM wkms_tasks
-       WHERE assigned_worker_id = $1
-         AND status = $2
-         AND completed_at >= $3
-         AND completed_at < $4
-       ORDER BY completed_at DESC`,
+           task_id,
+           room_number,
+           category,
+           priority,
+           submitted_at,
+           completed_at
+         FROM wkms_tasks
+         WHERE assigned_worker_id = $1
+           AND status = $2
+           AND completed_at >= $3
+           AND completed_at < $4
+         ORDER BY completed_at DESC`,
       [workerId, 'COMPLETED', startAt, endAt],
     );
 
@@ -209,7 +214,7 @@ export class TaskRepository {
          WHERE worker_id = $1
            AND role = $2
            AND is_active = TRUE
-         FOR UPDATE`,
+           FOR UPDATE`,
         [workerId, 'WORKER'],
       );
 
@@ -225,9 +230,7 @@ export class TaskRepository {
         [workerId, 'ASSIGNED', 'IN_PROGRESS'],
       );
 
-      const activeTaskCount = Number(
-        activeTasksResult.rows[0].count,
-      );
+      const activeTaskCount = Number(activeTasksResult.rows[0].count);
 
       if (activeTaskCount >= 3) {
         throw new Error('ACTIVE_TASK_LIMIT_REACHED');
@@ -237,7 +240,7 @@ export class TaskRepository {
         `SELECT task_id, status
          FROM wkms_tasks
          WHERE task_id = $1
-         FOR UPDATE`,
+           FOR UPDATE`,
         [taskId],
       );
 
@@ -247,10 +250,7 @@ export class TaskRepository {
 
       const taskStatus = taskResult.rows[0].status;
 
-      if (
-        taskStatus !== 'UNASSIGNED' &&
-        taskStatus !== 'ESCALATED'
-      ) {
+      if (taskStatus !== 'UNASSIGNED' && taskStatus !== 'ESCALATED') {
         throw new Error('TASK_NOT_AVAILABLE');
       }
 
@@ -260,7 +260,7 @@ export class TaskRepository {
              assigned_worker_id = $2,
              updated_at = NOW()
          WHERE task_id = $3
-         RETURNING *`,
+           RETURNING *`,
         ['ASSIGNED', workerId, taskId],
       );
 
@@ -290,7 +290,7 @@ export class TaskRepository {
            assigned_worker_id
          FROM wkms_tasks
          WHERE task_id = $1
-         FOR UPDATE`,
+           FOR UPDATE`,
         [taskId],
       );
 
@@ -313,7 +313,7 @@ export class TaskRepository {
          SET status = $1,
              updated_at = NOW()
          WHERE task_id = $2
-         RETURNING *`,
+           RETURNING *`,
         ['IN_PROGRESS', taskId],
       );
 
@@ -361,6 +361,10 @@ export class TaskRepository {
         throw new Error('INVALID_TASK_STATUS');
       }
 
+      // All three operations below share the same transaction:
+      // 1. Complete the task.
+      // 2. Save the audit record.
+      // 3. Save the durable completion event.
       const updateResult = await client.query(
         `UPDATE wkms_tasks
          SET status = $1,
@@ -370,6 +374,12 @@ export class TaskRepository {
          RETURNING *`,
         ['COMPLETED', taskId],
       );
+
+      const completedTask = updateResult.rows[0];
+
+      if (!completedTask) {
+        throw new Error('TASK_COMPLETION_UPDATE_FAILED');
+      }
 
       await appendTaskAudit(client, {
         taskId,
@@ -384,7 +394,65 @@ export class TaskRepository {
         newWorkerId: workerId,
       });
 
-      return updateResult.rows[0];
+      const eventId = `completion:${taskId}`;
+
+      // Persist the event before committing the transaction.
+      // A stable event ID supports consumer-side deduplication.
+      await client.query(
+        `INSERT INTO wkms_event_outbox (
+           event_id,
+           task_id,
+           event_type,
+           routing_key,
+           payload
+         )
+         VALUES (
+           $1,
+           $2::uuid,
+           $3,
+           $4,
+           jsonb_build_object(
+             'eventId', $1::text,
+             'eventType', $3::text,
+             'eventVersion', $5::integer,
+             'occurredAt',
+             to_char(
+               $6::timestamptz AT TIME ZONE 'UTC',
+               'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+             ),
+             'source', $7::text,
+             'data', jsonb_build_object(
+               'taskId', $2::text,
+               'workerId', $8::text,
+               'taskCategory', $9::text,
+               'roomNumber', $10::text,
+               'priority', $11::text,
+               'completedAt',
+               to_char(
+                 $6::timestamptz AT TIME ZONE 'UTC',
+                 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+               )
+             )
+           )
+         )`,
+        [
+          eventId,
+          taskId,
+          MESSAGE_EVENT_TYPES.taskCompleted,
+          RABBITMQ_TOPOLOGY.routingKeys.taskCompleted,
+          MESSAGE_EVENT_VERSIONS.taskCompleted,
+          completedTask.completed_at,
+          MESSAGE_SOURCES.workerManagement,
+          workerId,
+          completedTask.category,
+          completedTask.room_number,
+          completedTask.priority,
+        ],
+      );
+
+      // The dispatcher publishes this persisted event after COMMIT.
+      // If auditing or outbox insertion fails, completion rolls back.
+      return completedTask;
     });
   }
 }
