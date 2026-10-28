@@ -18,6 +18,13 @@ import { useTaskData } from "@/providers/task-data-provider";
 
 import type { MyTask } from "../types/my-task";
 import { MyTaskCard } from "./my-task-card";
+import {
+  loadPendingTaskUpdates, markTaskUpdateForReview, OfflineTaskAction,
+  type PendingTaskUpdate, queueTaskUpdate, removePendingTaskUpdate,
+} from "@/features/offline/offline-task-queue";
+
+import { getAuthSession } from "@/lib/auth-session";
+import {synchronizePendingTaskUpdate} from "@/features/offline/offline-task-sync";
 
 const MAX_ACTIVE_TASKS = 3;
 
@@ -38,11 +45,50 @@ export function MyTasksScreen() {
     myTasks,
     loading,
     error: providerError,
+    offline,
     refreshMyTasks,
   } = useTaskData();
 
   const [actionTaskId, setActionTaskId] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+
+  const [pendingUpdates, setPendingUpdates] =
+      useState<PendingTaskUpdate[]>(() => {
+        const session = getAuthSession();
+
+        if (!session) {
+          return [];
+        }
+
+        return loadPendingTaskUpdates(session.worker.worker_id);
+      });
+
+  useEffect(() => {
+    const handlePendingUpdatesChanged = () => {
+      const session = getAuthSession();
+
+      if (!session) {
+        setPendingUpdates([]);
+        return;
+      }
+
+      setPendingUpdates(
+          loadPendingTaskUpdates(session.worker.worker_id),
+      );
+    };
+
+    window.addEventListener(
+        "wkms:pending-updates-changed",
+        handlePendingUpdatesChanged,
+    );
+
+    return () => {
+      window.removeEventListener(
+          "wkms:pending-updates-changed",
+          handlePendingUpdatesChanged,
+      );
+    };
+  }, []);
 
   // Completed tasks are loaded from the authenticated Shift Summary API.
   const [completedTasks, setCompletedTasks] = useState<ShiftCompletedTask[]>(
@@ -51,6 +97,8 @@ export function MyTasksScreen() {
   const [completedLoading, setCompletedLoading] = useState(true);
   const [completedError, setCompletedError] = useState<string | null>(null);
   const [completedRefreshKey, setCompletedRefreshKey] = useState(0);
+  const [syncingUpdateId, setSyncingUpdateId] = useState<string | null>(null);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -102,11 +150,251 @@ export function MyTasksScreen() {
     return false;
   };
 
+  const handleDiscardPendingUpdate = (
+      updateId: string,
+      serverConfirmed = false,
+  ): boolean => {
+    const session = getAuthSession();
+
+    if (!session) {
+      router.replace("/login");
+      return false;
+    }
+
+    const workerId = session.worker.worker_id;
+
+    const currentUpdates = loadPendingTaskUpdates(workerId);
+    const selected = currentUpdates.find(
+        (update) => update.id === updateId,
+    );
+
+    if (!selected) {
+      setPendingUpdates(currentUpdates);
+      return false;
+    }
+
+    if (
+        !serverConfirmed &&
+        !window.confirm(
+            `Discard the locally saved ${selected.action} request ` +
+            `for task ${selected.taskId}?\n\n` +
+            "This does not change the task on the server.",
+        )
+    ) {
+      return false;
+    }
+
+    const removed = removePendingTaskUpdate(
+        workerId,
+        updateId,
+    );
+
+    setPendingUpdates(
+        loadPendingTaskUpdates(workerId),
+    );
+
+    if (!removed) {
+      setLocalError(
+          "Unable to discard this pending update.",
+      );
+      return false;
+    }
+
+    setLocalError(null);
+    return true;
+  };
+
+  const handleSyncPendingUpdate = async (update: PendingTaskUpdate) => {
+    if (syncingUpdateId !== null) {
+      return;
+    }
+
+    if (offline || !navigator.onLine) {
+      setSyncMessage("Reconnect to the internet before synchronizing.");
+      return;
+    }
+
+    const session = getAuthSession();
+
+    if (!session || session.worker.worker_id !== update.workerId) {
+      router.replace("/login");
+      return;
+    }
+
+    const confirmationMessage =
+        update.state === "NEEDS_REVIEW"
+            ? `Check whether the server already processed ${update.action} for task ${update.taskId}? This will not resubmit the action.`
+            : `Synchronize ${update.action} for task ${update.taskId}? The current server state will be checked before submission.`;
+
+    if (!window.confirm(confirmationMessage)) {
+      return;
+    }
+
+    setSyncingUpdateId(update.id);
+    setSyncMessage(null);
+
+    try {
+      const outcome = await synchronizePendingTaskUpdate(update);
+
+      // Do not update another user's queue if the session changed
+      // while synchronization was in progress.
+      const currentSession = getAuthSession();
+
+      if (
+          !currentSession ||
+          currentSession.worker.worker_id !== update.workerId ||
+          currentSession.accessToken !== session.accessToken
+      ) {
+        router.replace("/login");
+        return;
+      }
+
+      switch (outcome) {
+        case "CONFIRMED": {
+          // Reuse the existing validated discard/removal operation.
+          // The second argument is added in Step 4 to avoid showing
+          // a discard confirmation after the server has confirmed.
+          const removed = handleDiscardPendingUpdate(update.id, true);
+
+          if (!removed) {
+            setSyncMessage(
+                "The server confirmed this action, but its local queue entry could not be removed. Check confirmation again before discarding it.",
+            );
+            break;
+          }
+
+          setSyncMessage(
+              `${update.action} for task ${update.taskId} was confirmed by the server.`,
+          );
+
+          await refreshMyTasks().catch(() => undefined);
+
+          if (update.action === "COMPLETE") {
+            setCompletedRefreshKey((current) => current + 1);
+          }
+
+          break;
+        }
+
+
+        case "NEEDS_REVIEW": {
+          const saved = markTaskUpdateForReview(
+              update.workerId,
+              update.id,
+          );
+
+          setPendingUpdates(
+              loadPendingTaskUpdates(update.workerId),
+          );
+
+          if (!saved) {
+            setSyncMessage(
+                "The server reported a conflict, but the review status could not be saved. Do not resubmit this request.",
+            );
+            break;
+          }
+
+          setSyncMessage(
+              `Task ${update.taskId} needs review. ` +
+              "The action will not be submitted again. " +
+              "You can use Check confirmation to look for its original server receipt.",
+          );
+
+          break;
+        }
+
+        case "UNCERTAIN":
+          setSyncMessage(
+              `The result for task ${update.taskId} is uncertain. Keep the original pending request and check confirmation again later.`,
+          );
+          break;
+
+        case "RETRY_LATER":
+          setSyncMessage(
+              "The server could not be reached. The request remains stored.",
+          );
+          break;
+
+        case "AUTH_REQUIRED":
+          router.replace("/login");
+          break;
+
+        case "BUSY":
+          setSyncMessage("This request is already being checked.");
+          break;
+      }
+    } catch {
+      setSyncMessage(
+          "Synchronization could not be confirmed. The pending request has been retained.",
+      );
+    } finally {
+      setSyncingUpdateId(null);
+    }
+  };
+
+  const saveOfflineAction = (
+      taskId: string,
+      action: OfflineTaskAction,
+  ): void => {
+    const session = getAuthSession();
+
+    if (!session) {
+      setLocalError(
+          "Your session has expired. Sign in again before changing tasks.",
+      );
+      router.replace("/login");
+      return;
+    }
+
+    const workerId = session.worker.worker_id;
+
+    const task = myTasks.find(
+        (item) => item.task_id === taskId,
+    );
+
+    const expectedStatus =
+        action === "START" ? "ASSIGNED" : "IN_PROGRESS";
+
+    if (
+        !task ||
+        task.assigned_worker_id !== workerId ||
+        task.status !== expectedStatus
+    ) {
+      setLocalError(
+          "This task is not eligible for the requested offline update.",
+      );
+      return;
+    }
+
+    const pending = queueTaskUpdate(
+        workerId,
+        taskId,
+        action,
+    );
+
+    if (!pending) {
+      setLocalError(
+          "Unable to save this update. It may already be pending, or offline storage may be unavailable.",
+      );
+      return;
+    }
+
+    setPendingUpdates(
+        loadPendingTaskUpdates(workerId),
+    );
+
+    setLocalError(null);
+  };
+
   // --------------------------------------------------
   // Start Task
   // --------------------------------------------------
 
   const handleStart = async (taskId: string) => {
+    if (offline || !navigator.onLine) {
+      saveOfflineAction(taskId, "START");
+      return;
+    }
     setActionTaskId(taskId);
     setLocalError(null);
 
@@ -148,6 +436,11 @@ export function MyTasksScreen() {
   // --------------------------------------------------
 
   const handleComplete = async (taskId: string) => {
+    if (offline || !navigator.onLine) {
+      saveOfflineAction(taskId, "COMPLETE");
+      return;
+    }
+
     setActionTaskId(taskId);
     setLocalError(null);
 
@@ -211,6 +504,79 @@ export function MyTasksScreen() {
             ACTIVE TASKS
         ========================================== */}
 
+          {offline && (
+              <Alert
+                  type="warning"
+                  showIcon
+                  title="Offline — showing previously saved tasks"
+                  description="This information may be outdated. You may save permitted task updates locally, but they are not confirmed by the server."
+                  className="mb-4"
+              />
+          )}
+
+          {pendingUpdates.length > 0 && (
+              <Alert
+                  type="warning"
+                  showIcon
+                  title={`${pendingUpdates.length} task update(s) awaiting review`}
+                  description={
+                    <div>
+                      <p>
+                        These updates are saved locally and have not been
+                        confirmed by the WKMS server.
+                      </p>
+
+                      <ul className="mt-2 list-disc pl-5">
+                        {pendingUpdates.map((update) => (
+                            <li key={update.id} className="py-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span>
+                                  Task {update.taskId} — {update.action}
+                                  {" — "}
+                                  {update.state === "NEEDS_REVIEW"
+                                      ? "Needs review"
+                                      : "Pending server confirmation"}
+                                </span>
+
+                                <Button
+                                    size="small"
+                                    loading={syncingUpdateId === update.id}
+                                    disabled={offline || syncingUpdateId !== null}
+                                    onClick={() => {
+                                      void handleSyncPendingUpdate(update);
+                                    }}
+                                >
+                                  {update.state === "NEEDS_REVIEW"
+                                      ? "Check confirmation"
+                                      : "Sync"}
+                                </Button>
+                                <Button
+                                    size="small"
+                                    onClick={() => {
+                                      handleDiscardPendingUpdate(update.id);
+                                    }}
+                                    disabled={syncingUpdateId !== null}
+                                    aria-label={`Discard pending ${update.action} for task ${update.taskId}`}
+                                >
+                                  Discard
+                                </Button>
+                              </div>
+                            </li>
+                        ))}
+                      </ul>
+                    </div>
+                  }
+                  className="mb-4"
+              />
+          )}
+        {syncMessage && (
+            <Alert
+                type="info"
+                showIcon
+                title={syncMessage}
+                className="mb-4"
+            />
+        )}
           <section>
             <div className="mb-3 flex items-center justify-between gap-3">
               <h2 className="text-xs font-semibold tracking-[0.1em] text-slate-500 sm:text-sm">

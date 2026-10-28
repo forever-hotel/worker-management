@@ -5,10 +5,10 @@ import {
 import {
     claimTask,
     completeTask,
-    getMyTasks,
+    getMyTasks, getOfflineTaskActionReceipt,
     getTaskDetail,
     getTaskQueue,
-    startTask,
+    startTask, submitOfflineTaskAction,
 } from "./tasks.api";
 
 jest.mock(
@@ -113,4 +113,84 @@ describe("tasks API", () => {
             },
         );
     });
+
+
+    it("submits an offline START with its original request ID", async () => {
+        await submitOfflineTaskAction({
+            taskId: "task-1",
+            requestId: "77777777-7777-4777-8777-777777777777",
+            action: "START",
+        });
+
+        expect(mockedApiRequest).toHaveBeenCalledWith(
+            "/wkms/tasks/task-1/offline-action",
+            {
+                method: "POST",
+                body: JSON.stringify({
+                    requestId: "77777777-7777-4777-8777-777777777777",
+                    action: "START",
+                }),
+            },
+        );
+    });
+
+    it("submits offline COMPLETE without generating a new request ID", async () => {
+        const pendingAction = {
+            taskId: "task-2",
+            requestId: "88888888-8888-4888-8888-888888888888",
+            action: "COMPLETE" as const,
+        };
+
+        await submitOfflineTaskAction(pendingAction);
+        await submitOfflineTaskAction(pendingAction);
+
+        expect(mockedApiRequest).toHaveBeenCalledTimes(2);
+
+        for (const call of mockedApiRequest.mock.calls) {
+            expect(call[0]).toBe(
+                "/wkms/tasks/task-2/offline-action",
+            );
+
+            expect(call[1]).toEqual({
+                method: "POST",
+                body: JSON.stringify({
+                    requestId: pendingAction.requestId,
+                    action: "COMPLETE",
+                }),
+            });
+        }
+    });
+
+
+    it("checks a committed offline action receipt without mutating the task", async () => {
+        const taskId = "33333333-3333-4333-8333-333333333333";
+        const requestId = "77777777-7777-4777-8777-777777777777";
+
+        await getOfflineTaskActionReceipt(taskId, requestId);
+
+        expect(mockedApiRequest).toHaveBeenCalledWith(
+            `/wkms/tasks/${taskId}/offline-action/${requestId}`,
+        );
+
+        expect(mockedApiRequest).toHaveBeenCalledTimes(1);
+    });
+
+    it("preserves the original request ID when looking up a receipt", async () => {
+        const taskId = "33333333-3333-4333-8333-333333333333";
+        const requestId = "88888888-8888-4888-8888-888888888888";
+
+        await getOfflineTaskActionReceipt(taskId, requestId);
+        await getOfflineTaskActionReceipt(taskId, requestId);
+
+        expect(mockedApiRequest).toHaveBeenNthCalledWith(
+            1,
+            `/wkms/tasks/${taskId}/offline-action/${requestId}`,
+        );
+
+        expect(mockedApiRequest).toHaveBeenNthCalledWith(
+            2,
+            `/wkms/tasks/${taskId}/offline-action/${requestId}`,
+        );
+    });
+
 });

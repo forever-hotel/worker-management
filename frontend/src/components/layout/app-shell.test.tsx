@@ -32,6 +32,7 @@ describe("AppShell", () => {
       myTasksCount: 2,
       loading: false,
       error: null,
+      offline: false,
       refreshAll: jest.fn(),
       refreshQueue: jest.fn(),
       refreshMyTasks: jest.fn(),
