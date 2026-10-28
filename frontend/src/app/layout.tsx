@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 import {AppProviders} from "@/providers/app-providers";
+import { ServiceWorkerRegistration} from "@/providers/service-worker-registration";
 
 const geistSans = Geist({
     subsets: ["latin"],
@@ -39,6 +40,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     return (
         <html lang="en">
         <body className={geistSans.className}>
+        <ServiceWorkerRegistration />
         <AppProviders>{children}</AppProviders>
         </body>
         </html>

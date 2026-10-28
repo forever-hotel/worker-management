@@ -127,6 +127,7 @@ function setTaskData(overrides: Partial<ReturnType<typeof useTaskData>> = {}) {
     myTasksCount: 0,
     loading: false,
     error: null,
+    offline: false,
     refreshAll: mockRefreshAll,
     refreshQueue: mockRefreshQueue,
     refreshMyTasks: mockRefreshMyTasks,

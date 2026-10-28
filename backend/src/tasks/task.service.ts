@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -6,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { TaskRepository } from '../database/repositories/task.repository';
 import { WkmsRealtimeGateway } from '../realtime/wkms-realtime.gateway';
+import { TaskActionReceiptInput } from '../database/repositories/task-action-idempotency';
 
 @Injectable()
 export class TaskService {
@@ -138,6 +140,97 @@ export class TaskService {
     try {
       return await this.taskRepository.completeTask(taskId, workerId);
     } catch (error) {
+      this.handleLifecycleError(error);
+    }
+  }
+
+
+  /**
+   * Retrieve the original result of a committed offline action.
+   * Only the authenticated worker can retrieve their receipt.
+   */
+  async getOfflineTaskActionReceipt(
+      taskId: string,
+      requestId: string,
+      workerId: string,
+  ) {
+    const receipt =
+        await this.taskRepository.findTaskActionReceipt({
+          taskId,
+          requestId,
+          workerId,
+        });
+
+    if (!receipt) {
+      throw new NotFoundException(
+          'Offline action receipt not found',
+      );
+    }
+
+    if (
+        !receipt.response_body ||
+        typeof receipt.response_body !== 'object' ||
+        Array.isArray(receipt.response_body)
+    ) {
+      throw new ConflictException(
+          'Offline action receipt is incomplete',
+      );
+    }
+
+    return {
+      action: receipt.action,
+      task: receipt.response_body,
+    };
+  }
+
+  /**
+   * Submit a queued offline action using an idempotency receipt.
+   *
+   * Validation happens before any database mutation.
+   * The repository performs the transition and receipt write
+   * atomically in PostgreSQL.
+   */
+  async submitOfflineTaskAction(
+    input: Omit<TaskActionReceiptInput, 'action'> & {
+      action: unknown;
+    },
+  ) {
+    if (input.action !== 'START' && input.action !== 'COMPLETE') {
+      throw new BadRequestException(
+        'Offline action must be START or COMPLETE',
+      );
+    }
+
+    try {
+      const { result, replayed } =
+        await this.taskRepository.executeIdempotentTaskAction({
+          requestId: input.requestId,
+          taskId: input.taskId,
+          workerId: input.workerId,
+          action: input.action,
+        });
+
+      return {
+        task: result,
+        replayed,
+      };
+    } catch (error) {
+      if (error instanceof Error) {
+        switch (error.message) {
+          case 'TASK_ACTION_IDEMPOTENCY_CONFLICT':
+            throw new ConflictException(
+              'Request ID has already been used for another task action',
+            );
+
+          case 'TASK_ACTION_RECEIPT_INCOMPLETE':
+            throw new ConflictException(
+              'The previous request could not be confirmed',
+            );
+        }
+      }
+
+      // Preserve the existing 404, 403 and 409 mappings
+      // for lifecycle failures.
       this.handleLifecycleError(error);
     }
   }

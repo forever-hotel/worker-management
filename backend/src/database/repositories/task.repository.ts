@@ -11,6 +11,11 @@ import {
   RABBITMQ_TOPOLOGY,
 } from '../../messaging/messaging.constants';
 import { appendTaskAudit } from './task-audit.repository';
+import { PoolClient } from 'pg';
+import {
+  executeWithTaskActionReceipt,
+  TaskActionReceiptInput,
+} from './task-action-idempotency';
 
 export type CompletedTaskSummaryRecord = {
   task_id: string;
@@ -281,7 +286,6 @@ export class TaskRepository {
     });
   }
 
-
   async manuallyAssignTask(taskId: string, workerId: string) {
     return this.databaseService.withTransaction(async (client) => {
       // Lock the worker first, matching the existing claimTask lock order.
@@ -310,9 +314,7 @@ export class TaskRepository {
         [workerId],
       );
 
-      const activeCount = Number(
-        activeTasksResult.rows[0]?.count ?? 0,
-      );
+      const activeCount = Number(activeTasksResult.rows[0]?.count ?? 0);
 
       if (activeCount >= 3) {
         throw new Error('ACTIVE_TASK_LIMIT_REACHED');
@@ -335,8 +337,7 @@ export class TaskRepository {
       const task = taskResult.rows[0];
 
       if (
-        (task.status !== 'UNASSIGNED' &&
-          task.status !== 'ESCALATED') ||
+        (task.status !== 'UNASSIGNED' && task.status !== 'ESCALATED') ||
         task.assigned_worker_id !== null
       ) {
         throw new Error('TASK_NOT_AVAILABLE');
@@ -378,126 +379,156 @@ export class TaskRepository {
     });
   }
 
-
   async startTask(taskId: string, workerId: string) {
-    return this.databaseService.withTransaction(async (client) => {
-      const taskResult = await client.query(
-        `SELECT
-           task_id,
-           status,
-           assigned_worker_id
-         FROM wkms_tasks
-         WHERE task_id = $1
-           FOR UPDATE`,
-        [taskId],
-      );
+    return this.databaseService.withTransaction((client) =>
+      this.startTaskInTransaction(client, taskId, workerId),
+    );
+  }
 
-      if (taskResult.rowCount === 0) {
-        throw new Error('TASK_NOT_FOUND');
-      }
+  /**
+   * Performs START using the caller's existing transaction.
+   *
+   * The normal startTask() method still opens its own transaction.
+   * DDP-199 will use this method to execute a task transition and
+   * its idempotency receipt atomically.
+   *
+   * Do not call this method outside an active transaction.
+   */
+  async startTaskInTransaction(
+    client: PoolClient,
+    taskId: string,
+    workerId: string,
+  ) {
+    const taskResult = await client.query(
+      `SELECT
+         task_id,
+         status,
+         assigned_worker_id
+       FROM wkms_tasks
+       WHERE task_id = $1
+         FOR UPDATE`,
+      [taskId],
+    );
 
-      const task = taskResult.rows[0];
+    if (taskResult.rowCount === 0) {
+      throw new Error('TASK_NOT_FOUND');
+    }
 
-      if (task.assigned_worker_id !== workerId) {
-        throw new Error('TASK_NOT_OWNED');
-      }
+    const task = taskResult.rows[0];
 
-      if (task.status !== 'ASSIGNED') {
-        throw new Error('INVALID_TASK_STATUS');
-      }
+    if (task.assigned_worker_id !== workerId) {
+      throw new Error('TASK_NOT_OWNED');
+    }
 
-      const updateResult = await client.query(
-        `UPDATE wkms_tasks
-         SET status = $1,
-             updated_at = NOW()
-         WHERE task_id = $2
-           RETURNING *`,
-        ['IN_PROGRESS', taskId],
-      );
+    if (task.status !== 'ASSIGNED') {
+      throw new Error('INVALID_TASK_STATUS');
+    }
 
-      await appendTaskAudit(client, {
-        taskId,
-        action: 'TASK_STARTED',
-        actor: {
-          type: 'STAFF',
-          workerId,
-        },
-        previousStatus: task.status,
-        newStatus: 'IN_PROGRESS',
-        previousWorkerId: workerId,
-        newWorkerId: workerId,
-      });
+    const updateResult = await client.query(
+      `UPDATE wkms_tasks
+       SET status = $1,
+           updated_at = NOW()
+       WHERE task_id = $2
+       RETURNING *`,
+      ['IN_PROGRESS', taskId],
+    );
 
-      return updateResult.rows[0];
+    await appendTaskAudit(client, {
+      taskId,
+      action: 'TASK_STARTED',
+      actor: {
+        type: 'STAFF',
+        workerId,
+      },
+      previousStatus: task.status,
+      newStatus: 'IN_PROGRESS',
+      previousWorkerId: workerId,
+      newWorkerId: workerId,
     });
+
+    return updateResult.rows[0];
   }
 
   async completeTask(taskId: string, workerId: string) {
-    return this.databaseService.withTransaction(async (client) => {
-      const taskResult = await client.query(
-        `SELECT
+    return this.databaseService.withTransaction((client) =>
+      this.completeTaskInTransaction(client, taskId, workerId),
+    );
+  }
+
+  /**
+   * Completes a task using the caller's PostgreSQL transaction.
+   * The task update, audit entry and completion outbox event
+   * must all commit or roll back together.
+   */
+  async completeTaskInTransaction(
+    client: PoolClient,
+    taskId: string,
+    workerId: string,
+  ) {
+    const taskResult = await client.query(
+      `SELECT
            task_id,
            status,
            assigned_worker_id
          FROM wkms_tasks
          WHERE task_id = $1
          FOR UPDATE`,
-        [taskId],
-      );
+      [taskId],
+    );
 
-      if (taskResult.rowCount === 0) {
-        throw new Error('TASK_NOT_FOUND');
-      }
+    if (taskResult.rowCount === 0) {
+      throw new Error('TASK_NOT_FOUND');
+    }
 
-      const task = taskResult.rows[0];
+    const task = taskResult.rows[0];
 
-      if (task.assigned_worker_id !== workerId) {
-        throw new Error('TASK_NOT_OWNED');
-      }
+    if (task.assigned_worker_id !== workerId) {
+      throw new Error('TASK_NOT_OWNED');
+    }
 
-      if (task.status !== 'IN_PROGRESS') {
-        throw new Error('INVALID_TASK_STATUS');
-      }
+    if (task.status !== 'IN_PROGRESS') {
+      throw new Error('INVALID_TASK_STATUS');
+    }
 
-      // All three operations below share the same transaction:
-      // 1. Complete the task.
-      // 2. Save the audit record.
-      // 3. Save the durable completion event.
-      const updateResult = await client.query(
-        `UPDATE wkms_tasks
+    // All three operations below share the same transaction:
+    // 1. Complete the task.
+    // 2. Save the audit record.
+    // 3. Save the durable completion event.
+    const updateResult = await client.query(
+      `UPDATE wkms_tasks
          SET status = $1,
              completed_at = NOW(),
              updated_at = NOW()
          WHERE task_id = $2
          RETURNING *`,
-        ['COMPLETED', taskId],
-      );
+      ['COMPLETED', taskId],
+    );
 
-      const completedTask = updateResult.rows[0];
+    const completedTask = updateResult.rows[0];
 
-      if (!completedTask) {
-        throw new Error('TASK_COMPLETION_UPDATE_FAILED');
-      }
+    if (!completedTask) {
+      throw new Error('TASK_COMPLETION_UPDATE_FAILED');
+    }
 
-      await appendTaskAudit(client, {
-        taskId,
-        action: 'TASK_COMPLETED',
-        actor: {
-          type: 'STAFF',
-          workerId,
-        },
-        previousStatus: task.status,
-        newStatus: 'COMPLETED',
-        previousWorkerId: workerId,
-        newWorkerId: workerId,
-      });
+    await appendTaskAudit(client, {
+      taskId,
+      action: 'TASK_COMPLETED',
+      actor: {
+        type: 'STAFF',
+        workerId,
+      },
+      previousStatus: task.status,
+      newStatus: 'COMPLETED',
+      previousWorkerId: workerId,
+      newWorkerId: workerId,
+    });
 
-      const eventId = `completion:${taskId}`;
+    const eventId = `completion:${taskId}`;
 
-      // Persist the event before committing the transaction.
-      // A stable event ID supports consumer-side deduplication.
-      await client.query(
-        `INSERT INTO wkms_event_outbox (
+    // Persist the event before committing the transaction.
+    // A stable event ID supports consumer-side deduplication.
+    await client.query(
+      `INSERT INTO wkms_event_outbox (
            event_id,
            task_id,
            event_type,
@@ -507,7 +538,7 @@ export class TaskRepository {
          VALUES (
            $1,
            $2::uuid,
-           $3,
+           $3::text,
            $4,
            jsonb_build_object(
              'eventId', $1::text,
@@ -533,24 +564,86 @@ export class TaskRepository {
              )
            )
          )`,
-        [
-          eventId,
-          taskId,
-          MESSAGE_EVENT_TYPES.taskCompleted,
-          RABBITMQ_TOPOLOGY.routingKeys.taskCompleted,
-          MESSAGE_EVENT_VERSIONS.taskCompleted,
-          completedTask.completed_at,
-          MESSAGE_SOURCES.workerManagement,
-          workerId,
-          completedTask.category,
-          completedTask.room_number,
-          completedTask.priority,
-        ],
-      );
+      [
+        eventId,
+        taskId,
+        MESSAGE_EVENT_TYPES.taskCompleted,
+        RABBITMQ_TOPOLOGY.routingKeys.taskCompleted,
+        MESSAGE_EVENT_VERSIONS.taskCompleted,
+        completedTask.completed_at,
+        MESSAGE_SOURCES.workerManagement,
+        workerId,
+        completedTask.category,
+        completedTask.room_number,
+        completedTask.priority,
+      ],
+    );
 
-      // The dispatcher publishes this persisted event after COMMIT.
-      // If auditing or outbox insertion fails, completion rolls back.
-      return completedTask;
-    });
+    // The dispatcher publishes this persisted event after COMMIT.
+    // If auditing or outbox insertion fails, completion rolls back.
+    return completedTask;
   }
+
+  /**
+   * Execute START or COMPLETE with a durable idempotency receipt.
+   *
+   * Both the receipt and lifecycle operations use the same
+   * PostgreSQL transaction.
+   *
+   * Returning replayed=true means the original operation
+   * was already committed and its stored result is returned.
+   */
+  async executeIdempotentTaskAction(input: TaskActionReceiptInput) {
+    return this.databaseService.withTransaction((client) =>
+      executeWithTaskActionReceipt(client, input, async () => {
+        if (input.action === 'START') {
+          return this.startTaskInTransaction(
+            client,
+            input.taskId,
+            input.workerId,
+          );
+        }
+
+        return this.completeTaskInTransaction(
+          client,
+          input.taskId,
+          input.workerId,
+        );
+      }),
+    );
+  }
+
+
+  /**
+   * Look up a committed offline action receipt.
+   *
+   * A receipt is visible only to its original authenticated
+   * worker and for its original task.
+   *
+   * This is read-only and never retries a task mutation.
+   */
+  async findTaskActionReceipt(input: {
+    requestId: string;
+    taskId: string;
+    workerId: string;
+  }) {
+    const result = await this.databaseService.query<{
+      action: 'START' | 'COMPLETE';
+      response_body: unknown;
+    }>(
+        `SELECT action, response_body
+       FROM wkms_task_action_receipts
+       WHERE request_id = $1::uuid
+         AND task_id = $2::uuid
+         AND worker_id = $3::uuid`,
+        [
+          input.requestId,
+          input.taskId,
+          input.workerId,
+        ],
+    );
+
+    return result.rows[0] ?? null;
+  }
+
 }

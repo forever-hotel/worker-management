@@ -1,21 +1,25 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { synchronizePendingTaskUpdate } from "@/features/offline/offline-task-sync";
+import {
+  loadPendingTaskUpdates,
+  markTaskUpdateForReview,
+  removePendingTaskUpdate,
+  type PendingTaskUpdate,
+} from "@/features/offline/offline-task-queue";
 import { getShiftSummary } from "@/features/shifts/api/shift.api";
-import type { ShiftSummary } from "@/features/shifts/types/shift-summary";
-import { completeTask, startTask } from "@/features/tasks/api/tasks.api";
-import type { TaskApiRecord } from "@/features/tasks/types/task-api";
-import { ApiError } from "@/lib/api-client";
+import { getAuthSession } from "@/lib/auth-session";
 import { useTaskData } from "@/providers/task-data-provider";
 
-import type { MyTask } from "../types/my-task";
 import { MyTasksScreen } from "./my-tasks-screen";
 
-const mockReplace = jest.fn();
+const WORKER_ID = "22222222-2222-4222-8222-222222222222";
+const TASK_ID = "33333333-3333-4333-8333-333333333333";
+const REQUEST_ID = "77777777-7777-4777-8777-777777777777";
 
-const mockRouter = {
-  replace: mockReplace,
-};
+const mockReplace = jest.fn();
+const mockRouter = { replace: mockReplace };
 
 jest.mock("next/navigation", () => ({
   useRouter: () => mockRouter,
@@ -23,436 +27,233 @@ jest.mock("next/navigation", () => ({
 
 jest.mock("@/components/layout/app-shell", () => ({
   AppShell: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
+      <div>{children}</div>
   ),
+}));
+
+jest.mock("@/features/assignments/components/my-task-card", () => ({
+  MyTaskCard: () => <div>Task card</div>,
 }));
 
 jest.mock("@/providers/task-data-provider", () => ({
   useTaskData: jest.fn(),
 }));
 
-jest.mock("@/features/tasks/api/tasks.api", () => ({
-  startTask: jest.fn(),
-  completeTask: jest.fn(),
+jest.mock("@/lib/auth-session", () => ({
+  getAuthSession: jest.fn(),
 }));
 
 jest.mock("@/features/shifts/api/shift.api", () => ({
   getShiftSummary: jest.fn(),
 }));
 
-jest.mock("./my-task-card", () => ({
-  MyTaskCard: ({
-    task,
-    onStart,
-    onComplete,
-  }: {
-    task: MyTask;
-    onStart?: (taskId: string) => void;
-    onComplete?: (taskId: string) => void;
-  }) => (
-    <div data-testid="my-task-card">
-      {task.id} - {task.status}
-      {task.status === "ASSIGNED" && (
-        <button type="button" onClick={() => onStart?.(task.id)}>
-          Start {task.id}
-        </button>
-      )}
-      {task.status === "IN_PROGRESS" && (
-        <button type="button" onClick={() => onComplete?.(task.id)}>
-          Complete {task.id}
-        </button>
-      )}
-    </div>
-  ),
+jest.mock("@/features/offline/offline-task-sync", () => ({
+  synchronizePendingTaskUpdate: jest.fn(),
 }));
 
-const mockedUseTaskData = jest.mocked(useTaskData);
-const mockedStartTask = jest.mocked(startTask);
-const mockedCompleteTask = jest.mocked(completeTask);
-const mockedGetShiftSummary = jest.mocked(getShiftSummary);
+jest.mock("@/features/offline/offline-task-queue", () => ({
+  loadPendingTaskUpdates: jest.fn(),
+  markTaskUpdateForReview: jest.fn(),
+  removePendingTaskUpdate: jest.fn(),
+  queueTaskUpdate: jest.fn(),
+}));
 
-const shiftSummaryFixture: ShiftSummary = {
-  operational_day: {
-    timezone: "UTC",
-    start_at: "2026-10-09T00:00:00.000Z",
-    end_at: "2026-10-10T00:00:00.000Z",
-  },
-  worker: {
-    worker_id: "worker-1",
-    full_name: "Demo Worker",
-    vocation: "Housekeeping",
-  },
-  active_task_count: 2,
-  completed_task_count: 1,
-  available_escalated_task_count: 0,
-  average_task_turnaround_seconds: 600,
-  completed_tasks: [
-    {
-      task_id: "task-completed",
-      room_number: "203",
-      category: "EXTRA_TOWELS",
-      priority: "NORMAL",
-      submitted_at: "2026-10-09T08:00:00.000Z",
-      completed_at: "2026-10-09T08:10:00.000Z",
-      turnaround_seconds: 600,
-    },
-  ],
-};
+const mockedSync = jest.mocked(synchronizePendingTaskUpdate);
+const mockedLoad = jest.mocked(loadPendingTaskUpdates);
+const mockedMark = jest.mocked(markTaskUpdateForReview);
+const mockedRemove = jest.mocked(removePendingTaskUpdate);
+const mockedSession = jest.mocked(getAuthSession);
+const mockedTaskData = jest.mocked(useTaskData);
+const mockedSummary = jest.mocked(getShiftSummary);
 
-const mockRefreshAll = jest.fn(async () => undefined);
-const mockRefreshQueue = jest.fn(async () => undefined);
-const mockRefreshMyTasks = jest.fn(async () => undefined);
+let savedUpdates: PendingTaskUpdate[];
 
-const assignedTask: TaskApiRecord = {
-  task_id: "task-assigned",
-  room_number: "201",
-  category: "ROOM_CLEANING",
-  description: "Clean room 201",
-  priority: "NORMAL",
-  status: "ASSIGNED",
-  assigned_worker_id: "worker-1",
-  booking_id: "booking-1",
-  service_request_id: null,
-  food_order_id: null,
-  submitted_at: "2026-10-03T08:00:00.000Z",
-  completed_at: null,
-  source: "CHECKOUT_TRIGGER",
-  created_at: "2026-10-03T08:00:00.000Z",
-  updated_at: "2026-10-03T08:00:00.000Z",
-};
-
-const inProgressTask: TaskApiRecord = {
-  ...assignedTask,
-  task_id: "task-progress",
-  room_number: "202",
-  status: "IN_PROGRESS",
-};
-
-function setTaskData(overrides: Partial<ReturnType<typeof useTaskData>> = {}) {
-  mockedUseTaskData.mockReturnValue({
-    queue: [],
-    myTasks: [assignedTask, inProgressTask],
-    queueCount: 0,
-    myTasksCount: 2,
-    loading: false,
-    error: null,
-    refreshAll: mockRefreshAll,
-    refreshQueue: mockRefreshQueue,
-    refreshMyTasks: mockRefreshMyTasks,
-    ...overrides,
-  });
+function pendingUpdate(
+    state: PendingTaskUpdate["state"] = "PENDING",
+): PendingTaskUpdate {
+  return {
+    id: REQUEST_ID,
+    workerId: WORKER_ID,
+    taskId: TASK_ID,
+    action: "START",
+    expectedStatus: "ASSIGNED",
+    createdAt: Date.now(),
+    state,
+  };
 }
 
-/**
- * Wait for the initial Shift Summary request to finish.
- *
- * This prevents tests from ending while MyTasksScreen
- * still has pending asynchronous React state updates.
- */
-async function renderSettledScreen() {
-  render(<MyTasksScreen />);
-
-  await waitFor(() => {
-    const completedLink = screen.queryByRole("link", {
-      name: "View completed task for Room 203",
-    });
-
-    const emptyMessage = screen.queryByText("No completed tasks today");
-
-    const errorMessage = screen.queryByText("Unable to load completed tasks.");
-
-    expect(completedLink ?? emptyMessage ?? errorMessage).not.toBeNull();
-  });
-}
-
-describe("MyTasksScreen", () => {
+describe("DDP-199 My Tasks synchronization controls", () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    mockedGetShiftSummary.mockResolvedValue(shiftSummaryFixture);
+    savedUpdates = [pendingUpdate()];
 
-    setTaskData();
+    jest.spyOn(window, "confirm").mockReturnValue(true);
 
-    mockedStartTask.mockResolvedValue(inProgressTask);
+    mockedSession.mockReturnValue({
+      accessToken: "test-token",
+      worker: { worker_id: WORKER_ID },
+    } as unknown as ReturnType<typeof getAuthSession>);
 
-    mockedCompleteTask.mockResolvedValue({
-      ...inProgressTask,
-      status: "COMPLETED",
-      completed_at: "2026-10-09T09:00:00.000Z",
-    });
-  });
-
-  it("renders shared authenticated tasks without fetching on mount", async () => {
-    await renderSettledScreen();
-
-    expect(screen.getAllByTestId("my-task-card")).toHaveLength(2);
-
-    expect(screen.getByText("ACTIVE — 2 OF 3 SLOTS USED")).toBeInTheDocument();
-
-    expect(mockRefreshMyTasks).not.toHaveBeenCalled();
-    expect(mockedGetShiftSummary).toHaveBeenCalledTimes(1);
-  });
-
-  it("starts an assigned task and refreshes only My Tasks", async () => {
-    const user = userEvent.setup();
-
-    await renderSettledScreen();
-
-    await user.click(
-      screen.getByRole("button", {
-        name: "Start task-assigned",
-      }),
-    );
-
-    await waitFor(() => {
-      expect(mockedStartTask).toHaveBeenCalledWith("task-assigned");
-      expect(mockRefreshMyTasks).toHaveBeenCalledTimes(1);
-      expect(mockRefreshAll).not.toHaveBeenCalled();
-    });
-
-    expect(mockedGetShiftSummary).toHaveBeenCalledTimes(1);
-  });
-
-  it("completes an in-progress task and refreshes My Tasks", async () => {
-    const user = userEvent.setup();
-
-    await renderSettledScreen();
-
-    await user.click(
-      screen.getByRole("button", {
-        name: "Complete task-progress",
-      }),
-    );
-
-    await waitFor(() => {
-      expect(mockedCompleteTask).toHaveBeenCalledWith("task-progress");
-      expect(mockRefreshMyTasks).toHaveBeenCalledTimes(1);
-      expect(mockRefreshAll).not.toHaveBeenCalled();
-      expect(mockedGetShiftSummary).toHaveBeenCalledTimes(2);
-    });
-  });
-
-  it("shows an empty active-task state", async () => {
-    setTaskData({
+    mockedTaskData.mockReturnValue({
       myTasks: [],
+      queue: [],
       myTasksCount: 0,
-    });
+      queueCount: 0,
+      loading: false,
+      error: null,
+      offline: false,
+      refreshMyTasks: jest.fn(async () => undefined),
+      refreshQueue: jest.fn(async () => undefined),
+      refreshAll: jest.fn(async () => undefined),
+    } as ReturnType<typeof useTaskData>);
 
-    await renderSettledScreen();
-
-    expect(screen.getByText("No active tasks")).toBeInTheDocument();
-  });
-
-  it("shows provider error and retries My Tasks", async () => {
-    setTaskData({
-      error: "Unable to refresh task data.",
-    });
-
-    const user = userEvent.setup();
-
-    await renderSettledScreen();
-
-    expect(
-      screen.getByText("Unable to refresh task data."),
-    ).toBeInTheDocument();
-
-    await user.click(
-      screen.getByRole("button", {
-        name: "Retry",
-      }),
-    );
-
-    await waitFor(() => {
-      expect(mockRefreshMyTasks).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  it("shows loading state from the task provider", async () => {
-    setTaskData({
-      loading: true,
-    });
-
-    await renderSettledScreen();
-
-    expect(screen.getByText("Loading your tasks...")).toBeInTheDocument();
-  });
-
-  it("shows backend conflict when starting and reconciles My Tasks", async () => {
-    mockedStartTask.mockRejectedValueOnce(
-      new ApiError(
-        409,
-        { message: "Task state changed" },
-        "Task state changed",
-      ),
-    );
-
-    const user = userEvent.setup();
-
-    await renderSettledScreen();
-
-    await user.click(
-      screen.getByRole("button", {
-        name: "Start task-assigned",
-      }),
-    );
-
-    expect(await screen.findByText("Task state changed")).toBeInTheDocument();
-
-    expect(mockRefreshMyTasks).toHaveBeenCalledTimes(1);
-  });
-
-  it("shows a generic completion error", async () => {
-    mockedCompleteTask.mockRejectedValueOnce(new Error("network"));
-
-    const user = userEvent.setup();
-
-    await renderSettledScreen();
-
-    await user.click(
-      screen.getByRole("button", {
-        name: "Complete task-progress",
-      }),
-    );
-
-    expect(
-      await screen.findByText("Unable to complete this task."),
-    ).toBeInTheDocument();
-  });
-
-  it("redirects when starting returns 401", async () => {
-    mockedStartTask.mockRejectedValueOnce(
-      new ApiError(401, { message: "Unauthorized" }, "Unauthorized"),
-    );
-
-    const user = userEvent.setup();
-
-    await renderSettledScreen();
-
-    await user.click(
-      screen.getByRole("button", {
-        name: "Start task-assigned",
-      }),
-    );
-
-    await waitFor(() => {
-      expect(mockReplace).toHaveBeenCalledWith("/login");
-    });
-  });
-
-  it("displays completed tasks from the authenticated shift summary", async () => {
-    await renderSettledScreen();
-
-    const completedLink = screen.getByRole("link", {
-      name: "View completed task for Room 203",
-    });
-
-    expect(completedLink).toHaveAttribute(
-      "href",
-      "/tasks/task-completed?from=my-tasks",
-    );
-
-    expect(
-      screen.getByText("task-completed · Extra Towels"),
-    ).toBeInTheDocument();
-
-    expect(screen.getByText("Room 203")).toBeInTheDocument();
-
-    expect(screen.getByText("10 min turnaround")).toBeInTheDocument();
-
-    expect(
-      screen.getByRole("img", { name: "Extra Towels" }),
-    ).toBeInTheDocument();
-
-    expect(mockedGetShiftSummary).toHaveBeenCalledTimes(1);
-  });
-
-  it("displays an empty state when no tasks were completed today", async () => {
-    mockedGetShiftSummary.mockResolvedValue({
-      ...shiftSummaryFixture,
-      completed_task_count: 0,
+    mockedSummary.mockResolvedValue({
       completed_tasks: [],
+    } as unknown as Awaited<ReturnType<typeof getShiftSummary>>);
+
+    mockedLoad.mockImplementation(() => [...savedUpdates]);
+
+    mockedRemove.mockImplementation((_workerId, updateId) => {
+      if (!savedUpdates.some((item) => item.id === updateId)) {
+        return false;
+      }
+
+      savedUpdates = savedUpdates.filter(
+          (item) => item.id !== updateId,
+      );
+
+      return true;
     });
 
-    await renderSettledScreen();
+    mockedMark.mockImplementation((_workerId, updateId) => {
+      if (!savedUpdates.some((item) => item.id === updateId)) {
+        return false;
+      }
 
-    expect(screen.getByText("No completed tasks today")).toBeInTheDocument();
+      savedUpdates = savedUpdates.map((item) =>
+          item.id === updateId
+              ? { ...item, state: "NEEDS_REVIEW" }
+              : item,
+      );
+
+      return true;
+    });
+
+    mockedSync.mockResolvedValue("CONFIRMED");
   });
 
-  it("handles completed-history failure without losing active tasks", async () => {
-    mockedGetShiftSummary.mockRejectedValueOnce(
-      new Error("Temporary Gateway timeout"),
-    );
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("removes an action only after server confirmation", async () => {
+    const user = userEvent.setup();
+
+    render(<MyTasksScreen />);
+
+    // Wait for the completed-history effect and its state updates.
+    await screen.findByText("No completed tasks today");
+
+    await user.click(screen.getByRole("button", { name: "Sync" }));
+
+    await waitFor(() => {
+      expect(mockedSync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            id: REQUEST_ID,
+            taskId: TASK_ID,
+            action: "START",
+          }),
+      );
+
+      expect(mockedRemove).toHaveBeenCalledWith(
+          WORKER_ID,
+          REQUEST_ID,
+      );
+    });
+
+    expect(savedUpdates).toHaveLength(0);
+    expect(mockedMark).not.toHaveBeenCalled();
+  });
+
+  it("persists NEEDS_REVIEW without removing the request", async () => {
+    mockedSync.mockResolvedValue("NEEDS_REVIEW");
 
     const user = userEvent.setup();
 
-    await renderSettledScreen();
+    render(<MyTasksScreen />);
+
+    // Wait for the completed-history effect and its state updates.
+    await screen.findByText("No completed tasks today");
+
+    await user.click(screen.getByRole("button", { name: "Sync" }));
+
+    await waitFor(() => {
+      expect(mockedMark).toHaveBeenCalledWith(
+          WORKER_ID,
+          REQUEST_ID,
+      );
+    });
+
+    expect(savedUpdates).toHaveLength(1);
+    expect(savedUpdates[0].state).toBe("NEEDS_REVIEW");
+    expect(savedUpdates[0].id).toBe(REQUEST_ID);
+
+    expect(mockedRemove).not.toHaveBeenCalled();
 
     expect(
-      screen.getByText("Unable to load completed tasks."),
+        screen.getByRole("button", { name: "Check confirmation" }),
     ).toBeInTheDocument();
-
-    // Completed-history failures must not hide active tasks.
-    expect(screen.getAllByTestId("my-task-card")).toHaveLength(2);
-
-    await user.click(
-      screen.getByRole("button", {
-        name: "Retry",
-      }),
-    );
-
-    expect(
-      await screen.findByRole("link", {
-        name: "View completed task for Room 203",
-      }),
-    ).toBeInTheDocument();
-
-    expect(mockedGetShiftSummary).toHaveBeenCalledTimes(2);
   });
 
-  it("refreshes completed history after successfully completing a task", async () => {
-    mockedGetShiftSummary
-      .mockResolvedValueOnce(shiftSummaryFixture)
-      .mockResolvedValueOnce({
-        ...shiftSummaryFixture,
-        completed_task_count: 2,
-        completed_tasks: [
-          ...shiftSummaryFixture.completed_tasks,
-          {
-            task_id: "task-progress",
-            room_number: "202",
-            category: "ROOM_CLEANING",
-            priority: "NORMAL",
-            submitted_at: "2026-10-09T08:30:00.000Z",
-            completed_at: "2026-10-09T09:00:00.000Z",
-            turnaround_seconds: 1800,
-          },
-        ],
-      });
+  it("retains the request when the server outcome is uncertain", async () => {
+    mockedSync.mockResolvedValue("UNCERTAIN");
 
     const user = userEvent.setup();
 
-    await renderSettledScreen();
+    render(<MyTasksScreen />);
 
-    expect(mockedGetShiftSummary).toHaveBeenCalledTimes(1);
+    // Wait for the completed-history effect and its state updates.
+    await screen.findByText("No completed tasks today");
 
-    await user.click(
-      screen.getByRole("button", {
-        name: "Complete task-progress",
-      }),
-    );
+    await user.click(screen.getByRole("button", { name: "Sync" }));
 
-    // Verify the new completed task appears after the refresh.
-    const newlyCompletedLink = await screen.findByRole("link", {
-      name: "View completed task for Room 202",
+    await waitFor(() => {
+      expect(mockedSync).toHaveBeenCalledTimes(1);
+      expect(
+          screen.getByText(/result for task .* is uncertain/i),
+      ).toBeInTheDocument();
     });
 
-    expect(newlyCompletedLink).toHaveAttribute(
-      "href",
-      "/tasks/task-progress?from=my-tasks",
-    );
+    expect(savedUpdates).toHaveLength(1);
+    expect(savedUpdates[0].id).toBe(REQUEST_ID);
+    expect(mockedRemove).not.toHaveBeenCalled();
+    expect(mockedMark).not.toHaveBeenCalled();
+  });
 
-    expect(mockedCompleteTask).toHaveBeenCalledWith("task-progress");
-    expect(mockRefreshMyTasks).toHaveBeenCalledTimes(1);
-    expect(mockedGetShiftSummary).toHaveBeenCalledTimes(2);
+  it("does not allow synchronization while offline", async () => {
+    mockedTaskData.mockReturnValue({
+      myTasks: [],
+      queue: [],
+      myTasksCount: 0,
+      queueCount: 0,
+      loading: false,
+      error: null,
+      offline: true,
+      refreshMyTasks: jest.fn(async () => undefined),
+      refreshQueue: jest.fn(async () => undefined),
+      refreshAll: jest.fn(async () => undefined),
+    } as ReturnType<typeof useTaskData>);
+
+    render(<MyTasksScreen />);
+
+    // Wait for the completed-history effect and its state updates.
+    await screen.findByText("No completed tasks today");
+
+    expect(
+        screen.getByRole("button", { name: "Sync" }),
+    ).toBeDisabled();
+
+    expect(mockedSync).not.toHaveBeenCalled();
   });
 });

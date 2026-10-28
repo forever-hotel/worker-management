@@ -146,4 +146,63 @@ describe("auth session", () => {
             getAuthSession(),
         ).toBeNull();
     });
+
+    it("clears offline tasks when the worker logs out", () => {
+        saveAuthSession(loginResponse);
+
+        sessionStorage.setItem(
+            "wkms.offline.my-tasks.v1",
+            "previous-worker-tasks",
+        );
+
+        clearAuthSession();
+
+        expect(
+            sessionStorage.getItem("wkms.offline.my-tasks.v1"),
+        ).toBeNull();
+
+        expect(getAuthSession()).toBeNull();
+    });
+
+    it("clears previous offline data when a worker logs in", () => {
+        sessionStorage.setItem(
+            "wkms.offline.my-tasks.v1",
+            "previous-worker-tasks",
+        );
+
+        saveAuthSession({
+            ...loginResponse,
+            worker: {
+                ...loginResponse.worker,
+                worker_id: "worker-2",
+            },
+        });
+
+        expect(
+            sessionStorage.getItem("wkms.offline.my-tasks.v1"),
+        ).toBeNull();
+
+        expect(getAuthSession()?.worker.worker_id).toBe(
+            "worker-2",
+        );
+    });
+
+    it("clears offline tasks when authentication expires", () => {
+        saveAuthSession(loginResponse);
+
+        sessionStorage.setItem(
+            "wkms.offline.my-tasks.v1",
+            "previous-worker-tasks",
+        );
+
+        jest.spyOn(Date, "now").mockReturnValue(
+            5_000_000,
+        );
+
+        expect(getAuthSession()).toBeNull();
+
+        expect(
+            sessionStorage.getItem("wkms.offline.my-tasks.v1"),
+        ).toBeNull();
+    });
 });

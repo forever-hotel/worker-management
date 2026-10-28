@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1a3c5e">
+  <title>Offline | Forever City Hotel WKMS</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      font-family: Arial, sans-serif;
+      background: #f5f3ef;
+      color: #1a3c5e;
+    }
+    main {
+      max-width: 440px;
+      padding: 36px 28px;
+      text-align: center;
+      background: #ffffff;
+      border: 1px solid #d8d8d8;
+      border-radius: 16px;
+    }
+    img { width: 72px; height: 72px; }
+    h1 { margin: 20px 0 12px; font-size: 24px; }
+    p { line-height: 1.6; color: #404040; }
+    button {
+      margin-top: 14px;
+      padding: 12px 22px;
+      color: #ffffff;
+      background: #1a3c5e;
+      border: 0;
+      border-radius: 8px;
+      font-size: 15px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <img src="/icons/wkms-192.png" alt="WKMS">
+    <h1>You're offline</h1>
+    <p>
+      The Worker Management System cannot load this page
+      without a network connection.
+    </p>
+    <p>
+      Previously saved task updates may still be available
+      in your current browser session. They are not confirmed
+      until the server processes them.
+    </p>
+    <button type="button" onclick="location.reload()">
+      Try again
+    </button>
+  </main>
+</body>
+</html>

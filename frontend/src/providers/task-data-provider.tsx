@@ -18,20 +18,21 @@ import type { TaskApiRecord } from "@/features/tasks/types/task-api";
 
 import { ApiError } from "@/lib/api-client";
 import {connectTaskSocket, TASK_SOCKET_EVENTS} from "@/lib/task-socket";
+import {loadOfflineTasks, saveOfflineTasks} from "@/features/offline/offline-task-storage";
+import {getAuthSession} from "@/lib/auth-session";
+import {reconcilePendingTaskUpdates} from "@/features/offline/offline-task-reconciliation";
 
 type TaskDataContextValue = {
   queue: TaskApiRecord[];
   myTasks: TaskApiRecord[];
-
   queueCount: number;
   myTasksCount: number;
-
   loading: boolean;
   error: string | null;
-
   refreshAll: () => Promise<void>;
   refreshQueue: () => Promise<void>;
   refreshMyTasks: () => Promise<void>;
+  offline: boolean;
 };
 
 const TaskDataContext = createContext<TaskDataContextValue | null>(null);
@@ -55,6 +56,8 @@ export function TaskDataProvider({ children }: TaskDataProviderProps) {
 
   const initialLoadStartedRef = useRef(false);
 
+  const [offline, setOffline] = useState(false);
+
   const requestInFlightRef = useRef<Promise<void> | null>(null);
 
   const refreshQueue = useCallback(async () => {
@@ -67,11 +70,44 @@ export function TaskDataProvider({ children }: TaskDataProviderProps) {
   }, []);
 
   const refreshMyTasks = useCallback(async () => {
-    const result = await getMyTasks();
+    const session = getAuthSession();
 
-    if (mountedRef.current) {
-      setMyTasks(result);
-      setError(null);
+    try {
+      const result = await getMyTasks();
+
+      if (mountedRef.current) {
+        setMyTasks(result);
+        setError(null);
+        setOffline(false);
+
+        if (session && getAuthSession()?.worker.worker_id === session.worker.worker_id) {
+          const workerId = session.worker.worker_id;
+
+          saveOfflineTasks(workerId, result);
+
+          reconcilePendingTaskUpdates(workerId, result);
+          window.dispatchEvent(
+              new Event("wkms:pending-updates-changed"),
+          );
+        }
+      }
+    } catch (requestError) {
+      if (requestError instanceof ApiError && requestError.status === 401) {
+        throw requestError;
+      }
+
+      if (session && mountedRef.current) {
+        const cached = loadOfflineTasks(session.worker.worker_id);
+
+        if (cached) {
+          setMyTasks(cached);
+          setOffline(true);
+          setError(null);
+          return;
+        }
+      }
+
+      throw requestError;
     }
   }, []);
 
@@ -94,8 +130,21 @@ export function TaskDataProvider({ children }: TaskDataProviderProps) {
         }
 
         setQueue(queueResult);
-
         setMyTasks(myTasksResult);
+        setOffline(false);
+
+        const session = getAuthSession();
+
+        if (session) {
+          const workerId = session.worker.worker_id;
+
+          saveOfflineTasks(workerId, myTasksResult);
+
+          reconcilePendingTaskUpdates(workerId, myTasksResult);
+          window.dispatchEvent(
+              new Event("wkms:pending-updates-changed"),
+          );
+        }
       } catch (requestError) {
         if (!mountedRef.current) {
           return;
@@ -105,6 +154,19 @@ export function TaskDataProvider({ children }: TaskDataProviderProps) {
           router.replace("/login");
 
           return;
+        }
+        const session = getAuthSession();
+
+        if (session) {
+          const cached = loadOfflineTasks(session.worker.worker_id);
+
+          if (cached) {
+            setMyTasks(cached);
+            setQueue([]);
+            setOffline(true);
+            setError(null);
+            return;
+          }
         }
 
         setError("Unable to refresh task data.");
@@ -156,6 +218,18 @@ export function TaskDataProvider({ children }: TaskDataProviderProps) {
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [refreshAll]);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      void refreshAll().catch(() => undefined);
+    };
+
+    window.addEventListener("online", handleOnline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
     };
   }, [refreshAll]);
 
@@ -214,12 +288,12 @@ export function TaskDataProvider({ children }: TaskDataProviderProps) {
 
       loading,
       error,
-
+      offline,
       refreshAll,
       refreshQueue,
       refreshMyTasks,
     }),
-    [queue, myTasks, loading, error, refreshAll, refreshQueue, refreshMyTasks],
+    [queue, myTasks, loading, error, offline, refreshAll, refreshQueue, refreshMyTasks],
   );
 
   return (

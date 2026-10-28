@@ -2,6 +2,8 @@ import type {
     AuthSession,
     LoginResponse,
 } from "@/features/auth/types/auth";
+import {clearOfflineTasks} from "@/features/offline/offline-task-storage";
+import {clearPendingTaskUpdates} from "@/features/offline/offline-task-queue";
 
 const AUTH_SESSION_KEY = "wkms.auth.session";
 
@@ -20,7 +22,9 @@ export function saveAuthSession(
             response.expires_in * 1000,
         worker: response.worker,
     };
-
+    // A new login must not retain another worker's offline data.
+    clearOfflineTasks();
+    clearPendingTaskUpdates();
     if (hasBrowserStorage()) {
         window.sessionStorage.setItem(
             AUTH_SESSION_KEY,
@@ -32,6 +36,10 @@ export function saveAuthSession(
 }
 
 export function clearAuthSession(): void {
+    // Covers explicit logout, expired sessions and rejected JWTs.
+    clearOfflineTasks();
+    clearPendingTaskUpdates();
+
     if (!hasBrowserStorage()) {
         return;
     }
