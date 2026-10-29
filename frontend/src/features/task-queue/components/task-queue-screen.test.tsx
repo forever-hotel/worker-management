@@ -42,13 +42,15 @@ jest.mock("@/features/tasks/components/task-card", () => ({
   TaskCard: ({
     task,
     onClaim,
+    claimDisabled,
   }: {
     task: Task;
     onClaim?: (task: Task) => void;
+    claimDisabled?: boolean;
   }) => (
     <div data-testid="task-card">
       {task.id} - {task.category}
-      <button type="button" onClick={() => onClaim?.(task)}>
+      <button type="button" disabled={claimDisabled} onClick={() => onClaim?.(task)}>
         Claim {task.id}
       </button>
     </div>
@@ -125,6 +127,7 @@ function setTaskData(overrides: Partial<ReturnType<typeof useTaskData>> = {}) {
     myTasks: [],
     queueCount: queueTasks.length,
     myTasksCount: 0,
+    maxActiveTasks: 3,
     loading: false,
     error: null,
     offline: false,
@@ -310,4 +313,31 @@ describe("TaskQueueScreen", () => {
 
     expect(results).toHaveNoViolations();
   });
+  it("uses the server-configured task capacity", () => {
+    setTaskData({ maxActiveTasks: 2, myTasksCount: 1 });
+    render(<TaskQueueScreen />);
+    expect(screen.getByText("2 tasks max")).toBeInTheDocument();
+    expect(screen.getByText(/You have 1 active/)).toBeInTheDocument();
+  });
+
+  it("disables claiming when the configured capacity is full", () => {
+    setTaskData({ maxActiveTasks: 2, myTasksCount: 2 });
+    render(<TaskQueueScreen />);
+    expect(screen.getByText(/Active task limit reached/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Claim task-cleaning" })).toBeDisabled();
+  });
+
+  it("disables claiming when authoritative capacity is unavailable", () => {
+    setTaskData({ maxActiveTasks: null });
+    render(<TaskQueueScreen />);
+    expect(screen.getByText(/Task capacity unavailable/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Claim task-cleaning" })).toBeDisabled();
+  });
+
+  it("disables claiming when offline", () => {
+    setTaskData({ offline: true });
+    render(<TaskQueueScreen />);
+    expect(screen.getByRole("button", { name: "Claim task-cleaning" })).toBeDisabled();
+  });
+
 });

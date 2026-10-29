@@ -12,7 +12,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 
-import { getMyTasks, getTaskQueue } from "@/features/tasks/api/tasks.api";
+import { getMyTasks, getTaskQueue, getTaskCapacity } from "@/features/tasks/api/tasks.api";
 
 import type { TaskApiRecord } from "@/features/tasks/types/task-api";
 
@@ -33,6 +33,7 @@ type TaskDataContextValue = {
   refreshQueue: () => Promise<void>;
   refreshMyTasks: () => Promise<void>;
   offline: boolean;
+  maxActiveTasks?: number | null;
 };
 
 const TaskDataContext = createContext<TaskDataContextValue | null>(null);
@@ -58,7 +59,20 @@ export function TaskDataProvider({ children }: TaskDataProviderProps) {
 
   const [offline, setOffline] = useState(false);
 
+  // Null indicates an unverified server capacity; do not permit claims then.
+  const [maxActiveTasks, setMaxActiveTasks] = useState<number | null>(null);
+
   const requestInFlightRef = useRef<Promise<void> | null>(null);
+
+  const refreshCapacity = useCallback(async () => {
+    try {
+      const capacity = await getTaskCapacity();
+      if (mountedRef.current) setMaxActiveTasks(capacity.maxActiveTasks);
+    } catch {
+      // Never invent a safe capacity when the authoritative lookup fails.
+      if (mountedRef.current) setMaxActiveTasks(null);
+    }
+  }, []);
 
   const refreshQueue = useCallback(async () => {
     const result = await getTaskQueue();
@@ -79,6 +93,7 @@ export function TaskDataProvider({ children }: TaskDataProviderProps) {
         setMyTasks(result);
         setError(null);
         setOffline(false);
+        await refreshCapacity();
 
         if (session && getAuthSession()?.worker.worker_id === session.worker.worker_id) {
           const workerId = session.worker.worker_id;
@@ -109,7 +124,7 @@ export function TaskDataProvider({ children }: TaskDataProviderProps) {
 
       throw requestError;
     }
-  }, []);
+  }, [refreshCapacity]);
 
   const refreshAll = useCallback(async () => {
     if (requestInFlightRef.current) {
@@ -132,6 +147,7 @@ export function TaskDataProvider({ children }: TaskDataProviderProps) {
         setQueue(queueResult);
         setMyTasks(myTasksResult);
         setOffline(false);
+        await refreshCapacity();
 
         const session = getAuthSession();
 
@@ -184,7 +200,7 @@ export function TaskDataProvider({ children }: TaskDataProviderProps) {
     requestInFlightRef.current = request;
 
     return request;
-  }, [router]);
+  }, [router, refreshCapacity]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -289,11 +305,12 @@ export function TaskDataProvider({ children }: TaskDataProviderProps) {
       loading,
       error,
       offline,
+      maxActiveTasks,
       refreshAll,
       refreshQueue,
       refreshMyTasks,
     }),
-    [queue, myTasks, loading, error, offline, refreshAll, refreshQueue, refreshMyTasks],
+    [queue, myTasks, loading, error, offline, maxActiveTasks, refreshAll, refreshQueue, refreshMyTasks],
   );
 
   return (

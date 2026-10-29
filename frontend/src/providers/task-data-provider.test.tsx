@@ -7,7 +7,7 @@ import {
 } from "@testing-library/react";
 import { useState } from "react";
 
-import { getMyTasks, getTaskQueue } from "@/features/tasks/api/tasks.api";
+import { getMyTasks, getTaskQueue, getTaskCapacity } from "@/features/tasks/api/tasks.api";
 
 import type { TaskApiRecord } from "@/features/tasks/types/task-api";
 
@@ -29,6 +29,7 @@ jest.mock("@/features/tasks/api/tasks.api", () => ({
   getTaskQueue: jest.fn(),
 
   getMyTasks: jest.fn(),
+  getTaskCapacity: jest.fn(),
 }));
 
 jest.mock("@/lib/task-socket", () => ({
@@ -43,6 +44,7 @@ jest.mock("@/lib/task-socket", () => ({
 const mockedGetTaskQueue = jest.mocked(getTaskQueue);
 
 const mockedGetMyTasks = jest.mocked(getMyTasks);
+const mockedGetTaskCapacity = jest.mocked(getTaskCapacity);
 
 const mockedConnectTaskSocket = jest.mocked(connectTaskSocket);
 
@@ -166,6 +168,7 @@ describe("TaskDataProvider", () => {
 
     mockedGetTaskQueue.mockResolvedValue(queueTasks);
     mockedGetMyTasks.mockResolvedValue(myTasks);
+    mockedGetTaskCapacity.mockResolvedValue({ activeTaskCount: 1, maxActiveTasks: 3, remainingCapacity: 2 });
     mockedConnectTaskSocket.mockReturnValue(null);
   });
 

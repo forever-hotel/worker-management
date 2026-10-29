@@ -20,6 +20,10 @@ export class TaskService {
     return this.taskRepository.findAll();
   }
 
+  async getTaskCapacity(workerId: string) {
+    return this.taskRepository.getTaskCapacity(workerId);
+  }
+
   async getMyTasks(workerId: string) {
     return this.taskRepository.findMyActiveTasks(workerId);
   }
@@ -72,7 +76,7 @@ export class TaskService {
 
         case 'ACTIVE_TASK_LIMIT_REACHED':
           throw new ConflictException(
-            'Worker already has the maximum of three active tasks',
+            'Worker has reached the configured active-task limit',
           );
 
         case 'TASK_NOT_AVAILABLE':
@@ -114,7 +118,7 @@ export class TaskService {
 
         case 'ACTIVE_TASK_LIMIT_REACHED':
           throw new ConflictException(
-            'Worker already has the maximum of three active tasks',
+            'Worker has reached the configured active-task limit',
           );
 
         case 'TASK_NOT_AVAILABLE':

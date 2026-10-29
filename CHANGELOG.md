@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- DDP-200: Add configurable active-task limits, shared worker/FDS assignment enforcement, and capacity-aware claiming UX.
+
 ### Added
 - DDP-78: Consume KMS order-ready events to create food-delivery tasks.
 - DDP-78: Consume FDS checkout-completed events to create high-priority cleaning tasks.
