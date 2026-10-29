@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Get,
   Param,
   Post,
   UseGuards,
@@ -16,6 +17,15 @@ const UUID_PATTERN =
 @UseGuards(FrontDeskServiceGuard)
 export class FrontDeskAssignmentController {
   constructor(private readonly taskService: TaskService) {}
+
+  /** FDS service only: capacity eligibility, not on-shift presence. */
+  @Get(':taskId/eligible-workers')
+  async getEligibleWorkers(@Param('taskId') taskId: string) {
+    if (typeof taskId !== 'string' || !UUID_PATTERN.test(taskId)) {
+      throw new BadRequestException('Invalid taskId');
+    }
+    return this.taskService.getEligibleWorkers(taskId);
+  }
 
   @Post(':taskId/manual-assign')
   async manuallyAssignTask(

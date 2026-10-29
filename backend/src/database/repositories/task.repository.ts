@@ -203,6 +203,56 @@ export class TaskRepository {
     };
   }
 
+  /**
+   * List active WKMS workers with spare task capacity. This is not
+   * an attendance, shift-presence, or vocation-compatibility claim.
+   */
+  async findEligibleWorkers() {
+    type WorkerRow = {
+      worker_id: string;
+      full_name: string;
+      vocation: string | null;
+      active_task_count: number;
+      max_active_tasks: number;
+    };
+    const result = await this.databaseService.query<WorkerRow>(
+      `WITH policy AS (
+         SELECT COALESCE((SELECT max_active_tasks
+                          FROM public.wkms_task_policy
+                          WHERE singleton = TRUE), 3)::int AS max_active_tasks
+       ), workload AS (
+         SELECT assigned_worker_id, COUNT(*)::int AS active_task_count
+         FROM public.wkms_tasks
+         WHERE assigned_worker_id IS NOT NULL
+           AND status IN ('ASSIGNED', 'IN_PROGRESS')
+         GROUP BY assigned_worker_id
+       )
+       SELECT s.worker_id, s.full_name, s.vocation,
+              COALESCE(w.active_task_count, 0)::int AS active_task_count,
+              p.max_active_tasks
+       FROM public.staff_users s
+       CROSS JOIN policy p
+       LEFT JOIN workload w ON w.assigned_worker_id = s.worker_id
+       WHERE s.role = 'WORKER'
+         AND s.is_active = TRUE
+         AND COALESCE(w.active_task_count, 0) < p.max_active_tasks
+       ORDER BY COALESCE(w.active_task_count, 0) ASC,
+                s.full_name ASC, s.worker_id ASC`,
+    );
+    return result.rows.map((worker) => {
+      const activeTaskCount = Number(worker.active_task_count);
+      const maxActiveTasks = Number(worker.max_active_tasks);
+      return {
+        workerId: worker.worker_id,
+        fullName: worker.full_name,
+        vocation: worker.vocation,
+        activeTaskCount,
+        maxActiveTasks,
+        remainingCapacity: Math.max(0, maxActiveTasks - activeTaskCount),
+      };
+    });
+  }
+
   async countAvailableEscalatedTasks(): Promise<number> {
     const result = await this.databaseService.query<{
       count: number;

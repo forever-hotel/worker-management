@@ -5,6 +5,7 @@
 - DDP-200: Add configurable active-task limits, shared worker/FDS assignment enforcement, and capacity-aware claiming UX.
 
 ### Added
+- DDP-211: Add FDS eligible-worker lookup using the WKMS task-capacity policy; manual assignment retains transactional revalidation.
 - DDP-78: Consume KMS order-ready events to create food-delivery tasks.
 - DDP-78: Consume FDS checkout-completed events to create high-priority cleaning tasks.
 - DDP-78: Add RabbitMQ retry, dead-letter, reconnection, and idempotency handling.

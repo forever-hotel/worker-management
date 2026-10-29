@@ -24,6 +24,19 @@ export class TaskService {
     return this.taskRepository.getTaskCapacity(workerId);
   }
 
+  /** Read-only candidate list. The subsequent POST rechecks eligibility. */
+  async getEligibleWorkers(taskId: string) {
+    const task = await this.taskRepository.findById(taskId);
+    if (!task) throw new NotFoundException('Task not found');
+    if (
+      !['UNASSIGNED', 'ESCALATED'].includes(task.status) ||
+      task.assigned_worker_id !== null
+    ) {
+      throw new ConflictException('Task is no longer available for assignment');
+    }
+    return { taskId, workers: await this.taskRepository.findEligibleWorkers() };
+  }
+
   async getMyTasks(workerId: string) {
     return this.taskRepository.findMyActiveTasks(workerId);
   }
