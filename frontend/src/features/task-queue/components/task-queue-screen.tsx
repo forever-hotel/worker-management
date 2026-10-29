@@ -1,7 +1,7 @@
 "use client";
 
 import { Alert, Button, Spin } from "antd";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AppShell } from "@/components/layout/app-shell";
@@ -26,6 +26,8 @@ export function TaskQueueScreen() {
   const {
     queue,
     myTasksCount,
+    maxActiveTasks,
+    offline,
     loading,
     error: providerError,
     refreshAll,
@@ -36,6 +38,13 @@ export function TaskQueueScreen() {
   const [claimingTaskId, setClaimingTaskId] = useState<string | null>(null);
 
   const [localError, setLocalError] = useState<string | null>(null);
+  const [localSuccess, setLocalSuccess] = useState<string | null>(null);
+  const claimInFlightRef = useRef(false);
+  // Undefined exists only in older mocks. Production returns null until verified.
+  const limitUnknown = maxActiveTasks === null;
+  const limit = maxActiveTasks ?? 3;
+  const limitReached = myTasksCount >= limit;
+  const claimDisabled = limitUnknown || limitReached || Boolean(offline) || claimingTaskId !== null;
 
   const tasks = useMemo<Task[]>(() => queue.map(mapTaskApiRecord), [queue]);
 
@@ -52,9 +61,12 @@ export function TaskQueueScreen() {
   };
 
   const handleClaim = async (task: Task) => {
+    if (claimInFlightRef.current || limitUnknown || limitReached || offline) return;
+    claimInFlightRef.current = true;
     setClaimingTaskId(task.id);
 
     setLocalError(null);
+    setLocalSuccess(null);
 
     try {
       await claimTask(task.id);
@@ -69,12 +81,13 @@ export function TaskQueueScreen() {
        * claimed task now belongs to this worker
        */
       await refreshAll();
+      setLocalSuccess("Task claimed successfully.");
     } catch (requestError) {
       if (redirectIfUnauthorized(requestError)) {
         return;
       }
 
-      if (requestError instanceof ApiError && requestError.status === 409) {
+      if (requestError instanceof ApiError && [403, 404, 409].includes(requestError.status)) {
         /*
          * Another worker claimed it first.
          * Reconcile shared state with the server.
@@ -88,6 +101,7 @@ export function TaskQueueScreen() {
 
       setLocalError("Unable to claim this task.");
     } finally {
+      claimInFlightRef.current = false;
       setClaimingTaskId(null);
     }
   };
@@ -130,6 +144,15 @@ export function TaskQueueScreen() {
         {error && (
           <Alert type="error" showIcon title={error} className="mt-3" />
         )}
+        {localSuccess && !error && (
+          <Alert type="success" showIcon title={localSuccess} className="mt-3" />
+        )}
+        {limitUnknown && (
+          <Alert type="warning" showIcon title="Task capacity unavailable. Reconnect and retry before claiming." className="mt-3" />
+        )}
+        {limitReached && !limitUnknown && (
+          <Alert type="info" showIcon title="Active task limit reached. Complete a task to claim another." className="mt-3" />
+        )}
 
         {loading ? (
           <div className="flex min-h-48 items-center justify-center">
@@ -144,6 +167,7 @@ export function TaskQueueScreen() {
                   task={task}
                   onClaim={handleClaim}
                   claimLoading={claimingTaskId === task.id}
+                  claimDisabled={claimDisabled}
                 />
               ))
             ) : (
@@ -162,7 +186,7 @@ export function TaskQueueScreen() {
 
         <div className="mt-3 rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-center text-xs text-slate-500 sm:text-sm">
           Active limit:{" "}
-          <span className="font-medium text-slate-600">3 tasks max</span>
+          <span className="font-medium text-slate-600">{limitUnknown ? "Unavailable" : `${limit} tasks max`}</span>
           {" · "}
           You have {myTasksCount} active
         </div>

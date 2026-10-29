@@ -24,6 +24,14 @@ export class TaskController {
     return this.taskService.getQueue();
   }
 
+  /** DDP-200: worker-scoped policy and remaining capacity. */
+  @Get('capacity')
+  async getCapacity(
+    @CurrentWorker() worker: AuthenticatedWorker | undefined,
+  ) {
+    return this.taskService.getTaskCapacity(this.requireWorker(worker).worker_id);
+  }
+
   @Get('my-tasks')
   async getMyTasks(
     @CurrentWorker()

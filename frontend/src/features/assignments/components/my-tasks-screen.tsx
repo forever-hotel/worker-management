@@ -26,7 +26,6 @@ import {
 import { getAuthSession } from "@/lib/auth-session";
 import {synchronizePendingTaskUpdate} from "@/features/offline/offline-task-sync";
 
-const MAX_ACTIVE_TASKS = 3;
 
 const categoryLabels: Record<ShiftCompletedTask["category"], string> = {
   ROOM_CLEANING: "Room Cleaning",
@@ -47,6 +46,7 @@ export function MyTasksScreen() {
     error: providerError,
     offline,
     refreshMyTasks,
+    maxActiveTasks,
   } = useTaskData();
 
   const [actionTaskId, setActionTaskId] = useState<string | null>(null);
@@ -580,7 +580,7 @@ export function MyTasksScreen() {
           <section>
             <div className="mb-3 flex items-center justify-between gap-3">
               <h2 className="text-xs font-semibold tracking-[0.1em] text-slate-500 sm:text-sm">
-                ACTIVE — {activeTasks.length} OF {MAX_ACTIVE_TASKS} SLOTS USED
+                ACTIVE — {activeTasks.length} OF {maxActiveTasks === null ? "â€”" : maxActiveTasks ?? 3} SLOTS USED
               </h2>
             </div>
 

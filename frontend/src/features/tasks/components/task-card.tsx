@@ -11,6 +11,7 @@ type TaskCardProps = {
   task: Task;
   onClaim?: (task: Task) => void;
   claimLoading?: boolean;
+  claimDisabled?: boolean;
 };
 
 const categoryLabels: Record<Task["category"], string> = {
@@ -27,6 +28,7 @@ export function TaskCard({
   task,
   onClaim,
   claimLoading = false,
+  claimDisabled = false,
 }: TaskCardProps) {
   const router = useRouter();
 
@@ -121,6 +123,7 @@ export function TaskCard({
           type="primary"
           size="small"
           loading={claimLoading}
+          disabled={claimDisabled}
           className="min-h-9 min-w-28 font-semibold sm:min-h-10 sm:min-w-32"
           style={{
             boxShadow: "none",

@@ -9,6 +9,16 @@ export function getTaskQueue():
     );
 }
 
+export type TaskCapacity = {
+    activeTaskCount: number;
+    maxActiveTasks: number;
+    remainingCapacity: number;
+};
+
+export function getTaskCapacity(): Promise<TaskCapacity> {
+    return apiRequest<TaskCapacity>("/wkms/tasks/capacity");
+}
+
 export function getMyTasks():
     Promise<TaskApiRecord[]> {
     return apiRequest<TaskApiRecord[]>(

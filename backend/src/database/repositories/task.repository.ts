@@ -12,6 +12,14 @@ import {
 } from '../../messaging/messaging.constants';
 import { appendTaskAudit } from './task-audit.repository';
 import { PoolClient } from 'pg';
+
+// DDP-200: shared capacity policy source for worker claims and FDS assignments.
+const CAPACITY_POLICY_SQL = `
+  COALESCE(
+    (SELECT max_active_tasks FROM wkms_task_policy WHERE singleton = TRUE FOR SHARE),
+    3
+  )::int AS max_active_tasks`;
+
 import {
   executeWithTaskActionReceipt,
   TaskActionReceiptInput,
@@ -172,6 +180,29 @@ export class TaskRepository {
     return Number(result.rows[0]?.count ?? 0);
   }
 
+  /** Authoritative active capacity for an authenticated worker (DDP-200). */
+  async getTaskCapacity(workerId: string) {
+    const result = await this.databaseService.query<{
+      active_task_count: number;
+      max_active_tasks: number;
+    }>(
+      `SELECT COUNT(*)::int AS active_task_count,
+              COALESCE((SELECT max_active_tasks
+                        FROM wkms_task_policy WHERE singleton = TRUE), 3)::int AS max_active_tasks
+       FROM wkms_tasks
+       WHERE assigned_worker_id = $1
+         AND status IN ('ASSIGNED', 'IN_PROGRESS')`,
+      [workerId],
+    );
+    const activeTaskCount = Number(result.rows[0]?.active_task_count ?? 0);
+    const maxActiveTasks = Number(result.rows[0]?.max_active_tasks ?? 3);
+    return {
+      activeTaskCount,
+      maxActiveTasks,
+      remainingCapacity: Math.max(0, maxActiveTasks - activeTaskCount),
+    };
+  }
+
   async countAvailableEscalatedTasks(): Promise<number> {
     const result = await this.databaseService.query<{
       count: number;
@@ -228,7 +259,8 @@ export class TaskRepository {
       }
 
       const activeTasksResult = await client.query(
-        `SELECT COUNT(*)::int AS count
+        `SELECT COUNT(*)::int AS count,
+         ${CAPACITY_POLICY_SQL}
          FROM wkms_tasks
          WHERE assigned_worker_id = $1
            AND status IN ($2, $3)`,
@@ -237,7 +269,7 @@ export class TaskRepository {
 
       const activeTaskCount = Number(activeTasksResult.rows[0].count);
 
-      if (activeTaskCount >= 3) {
+      if (activeTaskCount >= Number(activeTasksResult.rows[0]?.max_active_tasks ?? 3)) {
         throw new Error('ACTIVE_TASK_LIMIT_REACHED');
       }
 
@@ -307,7 +339,8 @@ export class TaskRepository {
       // The row lock above protects this active-task count against
       // other assignments using the same worker-locking protocol.
       const activeTasksResult = await client.query(
-        `SELECT COUNT(*)::int AS count
+        `SELECT COUNT(*)::int AS count,
+         ${CAPACITY_POLICY_SQL}
          FROM wkms_tasks
          WHERE assigned_worker_id = $1
            AND status IN ('ASSIGNED', 'IN_PROGRESS')`,
@@ -316,7 +349,7 @@ export class TaskRepository {
 
       const activeCount = Number(activeTasksResult.rows[0]?.count ?? 0);
 
-      if (activeCount >= 3) {
+      if (activeCount >= Number(activeTasksResult.rows[0]?.max_active_tasks ?? 3)) {
         throw new Error('ACTIVE_TASK_LIMIT_REACHED');
       }
 
