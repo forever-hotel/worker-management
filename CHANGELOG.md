@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- DDP-218: Dockerize WKMS backend and frontend using multi-stage Docker builds.
+- DDP-218: Add Docker Compose with standardized ports and backend integration profile.
+- DDP-218: Add container health checks and Docker environment documentation.
+- DDP-218: Verify PostgreSQL, RabbitMQ and API Gateway connectivity using Docker.
+- DDP-218: Add Docker image-build verification to GitHub Actions CI.
+
 - DDP-200: Add configurable active-task limits, shared worker/FDS assignment enforcement, and capacity-aware claiming UX.
 - DDP-201: Add final WKMS verification evidence and audit logging structures to the isolated PostgreSQL test fixtures. Record completed tests and outstanding manual integration checks.
 

@@ -40,3 +40,48 @@ worker-management/
 ├── .gitignore
 └── README.md
 ```
+
+## Docker Deployment
+
+WKMS supports Docker-based deployment for its NestJS backend and Next.js frontend.
+
+### Service Ports
+
+| Service | Local Port |
+|---|---|
+| WKMS Backend | 3000 |
+| WKMS Frontend | 3001 |
+| API Gateway | 8080 |
+
+### Build Images
+
+    docker compose build frontend
+    docker compose --profile integration build backend
+
+### Start Frontend
+
+    docker compose up -d frontend
+
+Frontend URL: http://localhost:3001/login
+
+### Start Backend
+
+Create backend/.env.docker.local with the required PostgreSQL, JWT and RabbitMQ settings.
+
+    docker compose --profile integration up -d backend
+
+### Health Checks
+
+- Backend: http://localhost:3000/health/live
+- Backend readiness: http://localhost:3000/health/ready
+- Frontend: http://localhost:3001/login
+
+The frontend uses API Gateway port 8080 and Socket.IO backend port 3000.
+
+Public frontend URLs are configured during the Docker image build.
+
+### Integration Documentation
+
+See docs/DDP-218-dockerization.md for detailed setup, networking, security and verification instructions.
+
+Never commit real database credentials, JWT secrets or RabbitMQ passwords.
