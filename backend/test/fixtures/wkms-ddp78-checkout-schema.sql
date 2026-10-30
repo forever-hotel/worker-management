@@ -102,4 +102,16 @@ CREATE TABLE wkms_tasks (
                                 )
 );
 
+CREATE TABLE audit_logs (
+    audit_id BIGSERIAL PRIMARY KEY,
+    event_category TEXT NOT NULL,
+    actor_type TEXT NOT NULL,
+    staff_user_id UUID,
+    action TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    details JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 COMMIT;

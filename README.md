@@ -20,9 +20,14 @@ and view shift-related information.
 - NestJS
 - TypeScript
 
-Additional integrations such as PostgreSQL, WebSockets, RabbitMQ,
-authentication, and PWA functionality will be added during subsequent
-development issues.
+WKMS integrates PostgreSQL persistence, JWT-based worker
+authentication, RabbitMQ event messaging, Socket.IO realtime
+updates, and an installable Progressive Web Application (PWA)
+with offline support.
+
+Final verification results, known limitations, and outstanding
+cross-subsystem dependencies are documented in
+docs/DDP-201-final-verification.md.
 
 ## Repository Structure
 
@@ -30,5 +35,8 @@ development issues.
 worker-management/
 ├── frontend/       # Next.js frontend application
 ├── backend/        # NestJS backend application
+├── docs/           # Integration and verification documentation
+├── CHANGELOG.md
 ├── .gitignore
 └── README.md
+```
