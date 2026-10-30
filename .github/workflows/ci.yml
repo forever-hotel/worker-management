@@ -101,3 +101,22 @@ jobs:
 
       - name: Audit backend production dependencies
         run: npm audit --omit=dev --audit-level=high
+
+  docker:
+    name: Docker - Build WKMS Images
+    runs-on: ubuntu-latest
+    needs: [frontend, backend]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Build backend Docker image
+        run: docker build -t forever-hotel-wkms-backend:ci ./backend
+
+      - name: Build frontend Docker image
+        run: |
+          docker build \
+            --build-arg NEXT_PUBLIC_API_GATEWAY_URL=http://localhost:8080 \
+            --build-arg NEXT_PUBLIC_WKMS_SOCKET_URL=http://localhost:3000 \
+            -t forever-hotel-wkms-frontend:ci ./frontend
