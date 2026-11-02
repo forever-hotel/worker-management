@@ -1,22 +1,18 @@
-
 import { io } from "socket.io-client";
 
-import { getAccessToken } from "@/lib/auth-session";
-import {
-  connectTaskSocket,
-  TASK_SOCKET_EVENTS,
-} from "./task-socket";
+import { getAuthSession } from "@/lib/auth-session";
+import { connectTaskSocket, TASK_SOCKET_EVENTS } from "./task-socket";
 
 jest.mock("socket.io-client", () => ({
   io: jest.fn(),
 }));
 
 jest.mock("@/lib/auth-session", () => ({
-  getAccessToken: jest.fn(),
+  getAuthSession: jest.fn(),
 }));
 
 const mockedIo = jest.mocked(io);
-const mockedGetAccessToken = jest.mocked(getAccessToken);
+const mockedGetAuthSession = jest.mocked(getAuthSession);
 
 describe("connectTaskSocket", () => {
   const originalUrl = process.env.NEXT_PUBLIC_WKMS_SOCKET_URL;
@@ -24,10 +20,12 @@ describe("connectTaskSocket", () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    process.env.NEXT_PUBLIC_WKMS_SOCKET_URL =
-      "http://127.0.0.1:3000/";
+    process.env.NEXT_PUBLIC_WKMS_SOCKET_URL = "http://127.0.0.1:3000/";
 
-    mockedGetAccessToken.mockReturnValue("test-worker-jwt");
+    mockedGetAuthSession.mockReturnValue({
+      worker: { worker_id: "worker" },
+      expiresAt: Date.now() + 3600000,
+    } as never);
   });
 
   afterAll(() => {
@@ -39,7 +37,7 @@ describe("connectTaskSocket", () => {
   });
 
   it("does not connect without an access token", () => {
-    mockedGetAccessToken.mockReturnValue(null);
+    mockedGetAuthSession.mockReturnValue(null);
 
     expect(connectTaskSocket()).toBeNull();
 
@@ -59,18 +57,14 @@ describe("connectTaskSocket", () => {
       connect: jest.fn(),
     };
 
-    mockedIo.mockReturnValue(
-      socket as unknown as ReturnType<typeof io>,
-    );
+    mockedIo.mockReturnValue(socket as unknown as ReturnType<typeof io>);
 
     expect(connectTaskSocket()).toBe(socket);
 
     expect(mockedIo).toHaveBeenCalledWith(
       "http://127.0.0.1:3000/wkms",
       expect.objectContaining({
-        auth: {
-          token: "test-worker-jwt",
-        },
+        withCredentials: true,
         autoConnect: false,
         reconnection: true,
         transports: ["websocket"],

@@ -1,5 +1,5 @@
 ﻿import { Injectable, Logger } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { AuthService } from '../auth/auth.service';
 import {
   OnGatewayConnection,
   OnGatewayInit,
@@ -7,8 +7,6 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Namespace, Socket } from 'socket.io';
-import { StaffUserRepository } from '../database/repositories/staff-user.repository';
-import type { WorkerJwtPayload } from '../auth/types/worker-jwt-payload';
 
 type WorkerSocketData = {
   workerId?: string;
@@ -18,7 +16,10 @@ type WorkerSocketData = {
 @WebSocketGateway({
   namespace: '/wkms',
   cors: {
-    origin: ['http://localhost:3001'],
+    origin: (process.env.WMS_ALLOWED_ORIGINS ?? 'http://localhost:3002').split(
+      ',',
+    ),
+    credentials: true,
     methods: ['GET', 'POST'],
   },
 })
@@ -29,57 +30,35 @@ export class WkmsRealtimeGateway implements OnGatewayInit, OnGatewayConnection {
   @WebSocketServer()
   server!: Namespace;
 
-  constructor(
-    private readonly jwtService: JwtService,
-    private readonly staffUsers: StaffUserRepository,
-  ) {}
+  constructor(private readonly auth: AuthService) {}
 
   afterInit(server: Namespace): void {
     server.use(async (socket: Socket, next) => {
       try {
-        const token: unknown = socket.handshake.auth?.token;
-
-        if (typeof token !== 'string' || !token.trim()) {
-          next(new Error('Authentication required'));
-          return;
-        }
-
-        const payload =
-          await this.jwtService.verifyAsync<WorkerJwtPayload>(token);
-
+        const origin = socket.handshake.headers.origin;
+        const trusted = (
+          process.env.WMS_ALLOWED_ORIGINS ?? 'http://localhost:3002'
+        )
+          .split(',')
+          .map((value) => value.trim());
         if (
-          typeof payload.sub !== 'string' ||
-          !payload.sub.trim() ||
-          typeof payload.username !== 'string' ||
-          !payload.username.trim() ||
-          payload.role !== 'WORKER'
-        ) {
-          next(new Error('Invalid worker token'));
-          return;
-        }
-
-        const worker = await this.staffUsers.findSummaryById(payload.sub);
-
-        if (!worker) {
-          next(new Error('Worker is inactive or unavailable'));
-          return;
-        }
-
-        const expiresAt = (
-          payload as WorkerJwtPayload & {
-            exp?: unknown;
-          }
-        ).exp;
-
-        if (
-          typeof expiresAt !== 'number' ||
-          !Number.isSafeInteger(expiresAt) ||
-          expiresAt * 1000 <= Date.now()
-        ) {
-          next(new Error('Invalid token expiration'));
-          return;
-        }
-
+          (origin && !trusted.includes(origin)) ||
+          (!origin && !socket.handshake.auth?.token)
+        )
+          throw new Error('Unapproved socket origin');
+        const token =
+          typeof socket.handshake.auth?.token === 'string'
+            ? socket.handshake.auth.token
+            : socket.handshake.headers.cookie
+                ?.split(';')
+                .map((value) => value.trim())
+                .find((value) => value.startsWith('wms_session='))
+                ?.slice(12);
+        if (!token) throw new Error('Authentication required');
+        const session = await this.auth.session(token);
+        const payload = { sub: session.sub };
+        const expiresAt = session.expiresAt;
+        socket.data.staffToken = token;
         const socketData = socket.data as WorkerSocketData;
 
         socketData.workerId = payload.sub;
@@ -136,7 +115,14 @@ export class WkmsRealtimeGateway implements OnGatewayInit, OnGatewayConnection {
 
     expirationTimer.unref?.();
 
+    const revalidate = setInterval(() => {
+      void this.auth
+        .session(client.data.staffToken)
+        .catch(() => client.disconnect(true));
+    }, 5000);
+    revalidate.unref();
     client.once('disconnect', () => {
+      clearInterval(revalidate);
       clearTimeout(expirationTimer);
     });
   }

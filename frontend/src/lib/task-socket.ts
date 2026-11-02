@@ -1,6 +1,6 @@
 ﻿import { io, type Socket } from "socket.io-client";
 
-import { getAccessToken } from "@/lib/auth-session";
+import { getAuthSession } from "@/lib/auth-session";
 
 export const TASK_SOCKET_EVENTS = [
   "task.created",
@@ -9,20 +9,19 @@ export const TASK_SOCKET_EVENTS = [
 ] as const;
 
 export function connectTaskSocket(): Socket | null {
-  const token = getAccessToken();
+  const session = getAuthSession();
 
-  const baseUrl =
-    process.env.NEXT_PUBLIC_WKMS_SOCKET_URL?.trim();
+  const baseUrl = process.env.NEXT_PUBLIC_WKMS_SOCKET_URL?.trim();
 
-  if (!token || !baseUrl) {
+  if (!session || !baseUrl) {
     return null;
   }
 
   const socket = io(`${baseUrl.replace(/\/+$/, "")}/wkms`, {
-    auth: { token },
+    withCredentials: true,
     autoConnect: false,
     reconnection: true,
-    reconnectionAttempts: Infinity,
+    reconnectionAttempts: 5,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
     transports: ["websocket"],
