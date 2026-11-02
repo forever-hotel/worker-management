@@ -112,7 +112,8 @@ export async function auth(request: NextRequest, action: string) {
       return result;
     }
     const result = json(body);
-    if (action === "logout") result.cookies.set(cookie, "", options(request));
+    if (["logout", "reset-password"].includes(action))
+      result.cookies.set(cookie, "", options(request));
     return result;
   } catch {
     return json(

@@ -1,6 +1,7 @@
 "use client";
 
 import { Alert, Button, Form, Input } from "antd";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -130,6 +131,12 @@ export function LoginScreen() {
           <p className="text-center text-xs text-wkms-navy/70">
             Credentials provided by hotel manager
           </p>
+          <Link
+            href="/reset-password"
+            className="mt-4 block text-center text-sm text-wkms-navy underline"
+          >
+            Forgot password?
+          </Link>
         </Form>
       </section>
     </main>
