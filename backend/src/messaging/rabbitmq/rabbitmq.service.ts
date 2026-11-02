@@ -76,6 +76,7 @@ export class RabbitMqService implements OnModuleInit, OnApplicationShutdown {
     routingKey: string,
     payload: unknown,
     messageId?: string,
+    exchange = this.config.exchange,
   ): Promise<void> {
     if (!this.config.enabled) {
       throw new Error('RabbitMQ publishing is disabled');
@@ -90,6 +91,9 @@ export class RabbitMqService implements OnModuleInit, OnApplicationShutdown {
       throw new Error('RabbitMQ publisher channel unavailable');
     }
 
+    if (!['hotel.events', this.config.exchange].includes(exchange))
+      throw new Error('Unapproved exchange');
+    await channel.assertExchange(exchange, 'topic', { durable: true });
     const body = Buffer.from(JSON.stringify(payload), 'utf8');
 
     const publishMessageId = messageId ?? randomUUID();
@@ -109,7 +113,7 @@ export class RabbitMqService implements OnModuleInit, OnApplicationShutdown {
     let timeout: ReturnType<typeof setTimeout> | undefined;
 
     try {
-      channel.publish(this.config.exchange, routingKey, body, {
+      channel.publish(exchange, routingKey, body, {
         mandatory: true,
         persistent: true,
         contentType: 'application/json',

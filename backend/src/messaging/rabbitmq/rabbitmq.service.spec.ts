@@ -41,6 +41,7 @@ function createConnectedService() {
     .mockResolvedValue(undefined);
 
   const channel = {
+    assertExchange: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
     publish,
     waitForConfirms,
     on,
