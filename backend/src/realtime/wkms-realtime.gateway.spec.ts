@@ -1,59 +1,38 @@
 import { jest } from '@jest/globals';
-import { AuthService } from '../auth/auth.service';
 import { WkmsRealtimeGateway } from './wkms-realtime.gateway';
-import type { Namespace } from 'socket.io';
-describe('WMS socket gateway auth', () => {
-  it('authenticates HttpOnly-cookie connections through the same central session service', async () => {
-    const session = jest.fn<() => Promise<unknown>>().mockResolvedValue({
-      sub: 'worker',
-      role: 'WORKER',
-      expiresAt: Math.floor(Date.now() / 1000) + 3600,
-    });
-    const gateway = new WkmsRealtimeGateway({
-      session,
-    } as unknown as AuthService);
-    let middleware:
-      | ((socket: unknown, next: (error?: Error) => void) => Promise<void>)
-      | undefined;
-    gateway.afterInit({
-      use: (callback: typeof middleware) => {
-        middleware = callback;
-      },
-    } as unknown as Namespace);
-    const socket = {
-      handshake: {
-        auth: {},
-        headers: {
-          cookie: 'wms_session=central-token',
-          origin: 'http://localhost:3002',
-        },
-      },
-      data: {},
-    };
-    const next = jest.fn();
-    await middleware!(socket, next);
-    expect(session).toHaveBeenCalledWith('central-token');
-    expect(next).toHaveBeenCalledWith();
-  });
-  it('rejects central deactivation or revocation', async () => {
-    const gateway = new WkmsRealtimeGateway({
-      session: jest
-        .fn<() => Promise<unknown>>()
-        .mockRejectedValue(new Error('revoked')),
-    } as unknown as AuthService);
-    let middleware:
-      | ((socket: unknown, next: (error?: Error) => void) => Promise<void>)
-      | undefined;
-    gateway.afterInit({
-      use: (callback: typeof middleware) => {
-        middleware = callback;
-      },
-    } as unknown as Namespace);
-    const next = jest.fn();
-    await middleware!(
-      { handshake: { auth: { token: 'revoked' }, headers: {} }, data: {} },
-      next,
+import { RabbitMqService } from '../messaging/rabbitmq/rabbitmq.service';
+
+describe('Shared realtime relay', () => {
+  it('publishes only scoped invalidations through RabbitMQ', async () => {
+    const publishRealtime = jest
+      .fn<(system: string, name: string) => Promise<void>>()
+      .mockResolvedValue(undefined);
+    const relay = new WkmsRealtimeGateway({
+      publishRealtime,
+    } as unknown as RabbitMqService);
+    relay.emitTaskCreated('private-record-id');
+    expect(publishRealtime).toHaveBeenCalledWith('wkms', 'task.created');
+    relay.emitTaskClaimed('private-record-id');
+    expect(publishRealtime).toHaveBeenCalledWith('wkms', 'task.claimed');
+    relay.emitTaskEscalated('private-record-id');
+    expect(publishRealtime).toHaveBeenCalledWith('wkms', 'task.escalated');
+    relay.emitTaskUpdated('private-record-id');
+    expect(publishRealtime).toHaveBeenCalledWith('wkms', 'task.updated');
+    relay.emitTaskCompleted('private-record-id');
+    expect(publishRealtime).toHaveBeenCalledWith('wkms', 'task.completed');
+    expect(JSON.stringify(publishRealtime.mock.calls)).not.toContain(
+      'private-record-id',
     );
-    expect(next).toHaveBeenCalledWith(expect.any(Error));
+    await Promise.resolve();
+  });
+  it('does not undo a committed operation when the broker is unavailable', async () => {
+    const publishRealtime = jest
+      .fn<() => Promise<void>>()
+      .mockRejectedValue(new Error('offline'));
+    const relay = new WkmsRealtimeGateway({
+      publishRealtime,
+    } as unknown as RabbitMqService);
+    expect(() => relay.emitTaskCreated('record')).not.toThrow();
+    await Promise.resolve();
   });
 });

@@ -35,6 +35,7 @@ export async function auth(request: NextRequest, action: string) {
     "change-password",
     "request-password-reset",
     "reset-password",
+    "socket-ticket",
   ];
   if (
     !allowed.includes(action) ||
@@ -50,9 +51,53 @@ export async function auth(request: NextRequest, action: string) {
   )
     return json({ message: "Forbidden" }, 403);
   const token = request.cookies.get(cookie)?.value;
-  if (["session", "logout", "change-password"].includes(action) && !token)
+  if (
+    ["session", "logout", "change-password", "socket-ticket"].includes(
+      action,
+    ) &&
+    !token
+  )
     return json({ message: "Please sign in" }, 401);
   try {
+    if (action === "socket-ticket") {
+      const sessionResult = await fetch(gateway() + "/wkms/auth/session", {
+        headers: { Authorization: "Bearer " + token },
+        cache: "no-store",
+        redirect: "error",
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!sessionResult.ok)
+        return json(
+          { message: "Session verification failed" },
+          [401, 403].includes(sessionResult.status)
+            ? sessionResult.status
+            : 503,
+        );
+      const session = await sessionResult.json();
+      if (session.passwordChangeRequired !== false)
+        return json({ message: "Change your password first" }, 403);
+      const base = process.env.SHARED_WEBSOCKET_URL;
+      const key = process.env.WEBSOCKET_RELAY_KEY;
+      if (!base || !key)
+        return json({ message: "Realtime is unavailable" }, 503);
+      const response = await fetch(new URL("/internal/tickets/wkms", base), {
+        method: "POST",
+        headers: { Authorization: "Bearer " + token, "x-relay-key": key },
+        cache: "no-store",
+        redirect: "error",
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!response.ok)
+        return json({ message: "Realtime is unavailable" }, 503);
+      const body = await response.json();
+      if (
+        typeof body.ticket !== "string" ||
+        !/^[\w-]{43}$/.test(body.ticket) ||
+        body.expiresIn !== 30
+      )
+        return json({ message: "Realtime is unavailable" }, 503);
+      return json({ ticket: body.ticket, expiresIn: 30 });
+    }
     const raw = request.method === "GET" ? undefined : await request.text();
     if (raw && raw.length > 8192)
       return json({ message: "Request too large" }, 413);

@@ -62,9 +62,11 @@ describe("connectTaskSocket", () => {
     expect(connectTaskSocket()).toBe(socket);
 
     expect(mockedIo).toHaveBeenCalledWith(
-      "http://127.0.0.1:3000/wkms",
+      "http://127.0.0.1:3000",
       expect.objectContaining({
-        withCredentials: true,
+        withCredentials: false,
+        path: "/realtime/socket.io",
+        auth: expect.any(Function),
         autoConnect: false,
         reconnection: true,
         transports: ["websocket"],
@@ -80,6 +82,8 @@ describe("connectTaskSocket", () => {
       "task.created",
       "task.claimed",
       "task.escalated",
+      "task.updated",
+      "task.completed",
     ]);
   });
 });

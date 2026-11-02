@@ -57,6 +57,8 @@ describe('TaskController integration', () => {
           provide: WkmsRealtimeGateway,
           useValue: {
             emitTaskClaimed: jest.fn(),
+    emitTaskUpdated: jest.fn(),
+    emitTaskCompleted: jest.fn(),
           },
         },
         {
