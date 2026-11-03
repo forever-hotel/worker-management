@@ -33,7 +33,7 @@ export function LoginScreen() {
       );
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
-        setAuthenticationError("Invalid username or password.");
+        setAuthenticationError("Invalid email or password.");
       } else {
         setAuthenticationError("Unable to sign in. Please try again.");
       }
@@ -75,21 +75,24 @@ export function LoginScreen() {
             name="username"
             label={
               <span className="text-xs font-medium tracking-[0.08em] text-wkms-navy">
-                USERNAME OR EMAIL
+                EMAIL
               </span>
             }
             rules={[
               {
                 required: true,
                 whitespace: true,
-                message: "Username is required.",
+                message: "Email is required.",
               },
+              { type: "email", message: "Enter a valid email address." },
             ]}
           >
             <Input
               size="middle"
-              autoComplete="username"
-              placeholder="worker_001"
+              type="email"
+              autoComplete="email"
+              maxLength={320}
+              placeholder="worker@example.com"
             />
           </Form.Item>
 
