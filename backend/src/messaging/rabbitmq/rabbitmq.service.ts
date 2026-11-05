@@ -44,10 +44,39 @@ export class RabbitMqService implements OnModuleInit, OnApplicationShutdown {
     }
   }
 
+  async publishRealtime(subsystem: string, name: string): Promise<void> {
+    if (!this.config.enabled) throw new Error('RabbitMQ disabled');
+    await this.ensureConnected();
+    const channel = this.channel;
+    if (!channel) throw new Error('Realtime publisher unavailable');
+    await channel.assertExchange('hotel.realtime', 'topic', { durable: true });
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(
+        () => reject(new Error('Realtime publish timed out')),
+        5000,
+      );
+      channel.publish(
+        'hotel.realtime',
+        subsystem + '.' + name,
+        Buffer.from(JSON.stringify({ subsystem, name })),
+        {
+          persistent: true,
+          contentType: 'application/json',
+          expiration: '60000',
+        },
+        (error) => {
+          clearTimeout(timeout);
+          error ? reject(error) : resolve();
+        },
+      );
+    });
+  }
+
   async publishJson(
     routingKey: string,
     payload: unknown,
     messageId?: string,
+    exchange = this.config.exchange,
   ): Promise<void> {
     if (!this.config.enabled) {
       throw new Error('RabbitMQ publishing is disabled');
@@ -62,6 +91,9 @@ export class RabbitMqService implements OnModuleInit, OnApplicationShutdown {
       throw new Error('RabbitMQ publisher channel unavailable');
     }
 
+    if (!['hotel.events', this.config.exchange].includes(exchange))
+      throw new Error('Unapproved exchange');
+    await channel.assertExchange(exchange, 'topic', { durable: true });
     const body = Buffer.from(JSON.stringify(payload), 'utf8');
 
     const publishMessageId = messageId ?? randomUUID();
@@ -81,7 +113,7 @@ export class RabbitMqService implements OnModuleInit, OnApplicationShutdown {
     let timeout: ReturnType<typeof setTimeout> | undefined;
 
     try {
-      channel.publish(this.config.exchange, routingKey, body, {
+      channel.publish(exchange, routingKey, body, {
         mandatory: true,
         persistent: true,
         contentType: 'application/json',

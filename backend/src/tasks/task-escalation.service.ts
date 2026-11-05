@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 
 import { TaskRepository } from '../database/repositories/task.repository';
 import { WkmsRealtimeGateway } from '../realtime/wkms-realtime.gateway';
@@ -13,7 +13,7 @@ export class TaskEscalationService {
     private readonly realtimeGateway: WkmsRealtimeGateway,
   ) {}
 
-  @Cron(CronExpression.EVERY_5_MINUTES)
+  @Cron('*/5 * * * * *')
   async processOverdueTasks(): Promise<void> {
     const newlyEscalatedTasks =
       await this.taskRepository.escalateOverdueTasks();

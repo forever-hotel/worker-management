@@ -110,6 +110,20 @@ describe('OutboxDispatcherService', () => {
     );
   });
 
+  it('routes canonical owner changes to hotel.events without changing native event routes', async () => {
+    const context = setup();
+    context.query.mockResolvedValueOnce({
+      rows: [{ ...event, routing_key: 'task.changed' }],
+    });
+    await context.dispatcher.dispatchPendingEvents();
+    expect(context.publishJson).toHaveBeenCalledWith(
+      'task.changed',
+      event.payload,
+      event.event_id,
+      'hotel.events',
+    );
+  });
+
   it('keeps failed messages pending', async () => {
     const context = setup();
 

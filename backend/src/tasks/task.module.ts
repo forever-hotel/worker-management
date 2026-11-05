@@ -1,4 +1,7 @@
 import { Module } from '@nestjs/common';
+import { FrontDeskTaskService } from './front-desk-task.service';
+import { FrontDeskTaskController } from './front-desk-task.controller';
+import { ServiceRequestConsumer } from '../messaging/consumers/service-request.consumer';
 import { AuthModule } from '../auth/auth.module';
 import { FrontDeskServiceGuard } from '../auth/guards/front-desk-service.guard';
 import { MessagingModule } from '../messaging/messaging.module';
@@ -10,7 +13,17 @@ import { TaskService } from './task.service';
 
 @Module({
   imports: [AuthModule, MessagingModule, RealtimeModule],
-  controllers: [TaskController, FrontDeskAssignmentController],
-  providers: [TaskService, TaskEscalationService, FrontDeskServiceGuard],
+  controllers: [
+    TaskController,
+    FrontDeskAssignmentController,
+    FrontDeskTaskController,
+  ],
+  providers: [
+    FrontDeskTaskService,
+    ServiceRequestConsumer,
+    TaskService,
+    TaskEscalationService,
+    FrontDeskServiceGuard,
+  ],
 })
 export class TaskModule {}

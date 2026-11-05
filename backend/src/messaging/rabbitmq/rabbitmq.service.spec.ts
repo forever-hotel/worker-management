@@ -41,6 +41,7 @@ function createConnectedService() {
     .mockResolvedValue(undefined);
 
   const channel = {
+    assertExchange: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
     publish,
     waitForConfirms,
     on,
@@ -73,6 +74,29 @@ function createConnectedService() {
 describe('RabbitMqService', () => {
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  it('confirms safe task invalidations on the shared exchange', async () => {
+    const { service, publish, channel } = createConnectedService();
+    Object.assign(channel, {
+      assertExchange: jest
+        .fn<() => Promise<void>>()
+        .mockResolvedValue(undefined),
+    });
+    publish.mockImplementation((...args: unknown[]) => {
+      (args[4] as (error: null) => void)(null);
+      return true;
+    });
+    await service.publishRealtime('wkms', 'task.completed');
+    expect(publish).toHaveBeenCalledWith(
+      'hotel.realtime',
+      'wkms.task.completed',
+      Buffer.from(
+        JSON.stringify({ subsystem: 'wkms', name: 'task.completed' }),
+      ),
+      expect.objectContaining({ expiration: '60000', persistent: true }),
+      expect.any(Function),
+    );
   });
 
   it('rejects publishing when RabbitMQ is disabled', async () => {
