@@ -54,7 +54,7 @@ describe('FDS-to-WMS source ownership and idempotency', () => {
       taskId: 'task-1',
       roomNumber: '101',
     });
-    expect(f.query.mock.calls[2][0]).toContain("r.source='FRONT_DESK'");
+    expect(f.query.mock.calls[2][0]).toContain("r.source IN ('FRONT_DESK','GUEST_APP')");
     expect(f.query.mock.calls[4][0]).toContain('INSERT INTO audit_logs');
     expect(f.emitTaskCreated).toHaveBeenCalledWith('task-1');
   });

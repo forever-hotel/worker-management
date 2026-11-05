@@ -37,7 +37,7 @@ export class FrontDeskTaskService {
       const source = await client.query(
         `SELECT r.*, b.status::text AS booking_status FROM public.foss_service_requests r
         JOIN public.bookings b ON b.booking_id=r.booking_id AND b.room_number=r.room_number
-        WHERE r.request_id=$1 AND r.source='FRONT_DESK' FOR SHARE OF r,b`,
+        WHERE r.request_id=$1 AND r.source IN ('FRONT_DESK','GUEST_APP') FOR SHARE OF r,b`,
         [requestId],
       );
       const request = source.rows[0];
@@ -49,7 +49,7 @@ export class FrontDeskTaskService {
         throw new ConflictException('Request is no longer eligible for a task');
       const inserted = await client.query(
         `INSERT INTO public.wkms_tasks(room_number,category,description,priority,status,source,service_request_id,booking_id,submitted_at)
-        VALUES($1,$2,$3,'NORMAL','UNASSIGNED','FRONT_DESK',$4,$5,$6) RETURNING *`,
+        VALUES($1,$2,$3,$8,'UNASSIGNED',$7,$4,$5,$6) RETURNING *`,
         [
           request.room_number,
           request.category,
@@ -57,6 +57,8 @@ export class FrontDeskTaskService {
           requestId,
           request.booking_id,
           request.submitted_at,
+          request.source === 'GUEST_APP' ? 'GUEST_APP' : 'FRONT_DESK',
+          request.priority === 'HIGH' ? 'HIGH' : 'NORMAL',
         ],
       );
       const task = inserted.rows[0];
