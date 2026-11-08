@@ -5,8 +5,8 @@ import {
   MESSAGE_SOURCES,
 } from '../messaging.constants';
 
-const UUID_V4_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const FOOD_ORDER_UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[45][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const ISO_UTC_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
@@ -103,7 +103,7 @@ export function validateOrderReadyEvent(payload: unknown): OrderReadyEvent {
 
   if (
     typeof data.foodOrderId !== 'string' ||
-    !UUID_V4_PATTERN.test(data.foodOrderId)
+    !FOOD_ORDER_UUID_PATTERN.test(data.foodOrderId)
   ) {
     throw new OrderReadyEventValidationError('Invalid food order identifier');
   }

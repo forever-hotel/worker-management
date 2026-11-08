@@ -20,6 +20,28 @@ function makeEvent() {
 }
 
 describe('KMS order-ready event validator', () => {
+  it('accepts a KMS UUIDv5 food-order ID', () => {
+    const foodOrderId = 'c4cb0f05-0021-51a4-8a5f-5715b04044fe';
+    const event = {
+      ...makeEvent(),
+      eventId: `order-ready:${foodOrderId}`,
+      data: { foodOrderId, roomNumber: 'R101' },
+    };
+    expect(validateOrderReadyEvent(event)).toEqual(event);
+  });
+
+  it('rejects unsupported UUID versions', () => {
+    const foodOrderId = 'c4cb0f05-0021-11a4-8a5f-5715b04044fe';
+    const event = {
+      ...makeEvent(),
+      eventId: `order-ready:${foodOrderId}`,
+      data: { foodOrderId, roomNumber: 'R101' },
+    };
+    expect(() => validateOrderReadyEvent(event)).toThrow(
+      OrderReadyEventValidationError,
+    );
+  });
+
   it('accepts a valid order-ready event', () => {
     const payload = makeEvent();
 
