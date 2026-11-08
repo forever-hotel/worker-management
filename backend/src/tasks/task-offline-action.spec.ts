@@ -42,15 +42,21 @@ function createSetup() {
     executeIdempotentTaskAction,
   } as unknown as TaskRepository;
 
+  const realtimeGateway = {
+    emitTaskUpdated: jest.fn(),
+    emitTaskCompleted: jest.fn(),
+  };
+
   const service = new TaskService(
     repository,
-    {} as ConstructorParameters<typeof TaskService>[1],
+    realtimeGateway as unknown as ConstructorParameters<typeof TaskService>[1],
   );
 
   const controller = new TaskController(service);
 
   return {
     executeIdempotentTaskAction,
+    realtimeGateway,
     service,
     controller,
   };
@@ -83,6 +89,28 @@ describe('DDP-199 offline task action API', () => {
       task: completedTask,
       replayed: false,
     });
+    expect(setup.realtimeGateway.emitTaskCompleted).toHaveBeenCalledWith(taskId);
+    expect(setup.realtimeGateway.emitTaskCompleted).toHaveBeenCalledTimes(1);
+    expect(setup.realtimeGateway.emitTaskUpdated).not.toHaveBeenCalled();
+  });
+
+  it('emits an update after a new START action commits', async () => {
+    const setup = createSetup();
+    setup.executeIdempotentTaskAction.mockResolvedValue({
+      result: { ...completedTask, status: 'IN_PROGRESS' },
+      replayed: false,
+    });
+
+    await setup.controller.submitOfflineTaskAction(
+      taskId,
+      requestId,
+      'START',
+      worker,
+    );
+
+    expect(setup.realtimeGateway.emitTaskUpdated).toHaveBeenCalledWith(taskId);
+    expect(setup.realtimeGateway.emitTaskUpdated).toHaveBeenCalledTimes(1);
+    expect(setup.realtimeGateway.emitTaskCompleted).not.toHaveBeenCalled();
   });
 
   it('returns a stored response for an idempotent replay', async () => {
@@ -102,6 +130,8 @@ describe('DDP-199 offline task action API', () => {
 
     expect(response.replayed).toBe(true);
     expect(response.task).toEqual(completedTask);
+    expect(setup.realtimeGateway.emitTaskCompleted).not.toHaveBeenCalled();
+    expect(setup.realtimeGateway.emitTaskUpdated).not.toHaveBeenCalled();
   });
 
   it('rejects an invalid action before accessing the repository', async () => {
