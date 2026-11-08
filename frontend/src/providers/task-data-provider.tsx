@@ -221,7 +221,7 @@ export function TaskDataProvider({ children }: TaskDataProviderProps) {
    * when the worker returns to the WKMS browser tab,
    * refresh the shared data once.
    *
-   * DDP-79 will later add Socket.IO realtime updates.
+   * Shared Socket.IO invalidations also refresh these snapshots.
    */
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -249,7 +249,7 @@ export function TaskDataProvider({ children }: TaskDataProviderProps) {
     };
   }, [refreshAll]);
 
-  // DDP-79: Realtime updates from the WKMS backend.
+  // Shared WebSocket updates arrive through the API Gateway.
   useEffect(() => {
     const socket = connectTaskSocket();
 
@@ -262,7 +262,7 @@ export function TaskDataProvider({ children }: TaskDataProviderProps) {
     };
 
     const handleAuthError = (error: Error) => {
-      if (/auth|token|worker|unauthorized|expired|invalid/i.test(error.message)) {
+      if (/SESSION_EXPIRED/.test(error.message)) {
         socket.disconnect();
         router.replace("/login");
       }
@@ -270,6 +270,13 @@ export function TaskDataProvider({ children }: TaskDataProviderProps) {
 
     // Re-fetch after reconnecting to recover missed events.
     socket.on("connect", refreshTasks);
+    const handleTransport = (status: { healthy?: boolean }) => {
+      if (status?.healthy === true) refreshTasks();
+    };
+    socket.on("realtime.status", handleTransport);
+    const resync = setInterval(() => {
+      if (document.visibilityState === "visible") refreshTasks();
+    }, 30000);
 
     for (const eventName of TASK_SOCKET_EVENTS) {
       socket.on(eventName, refreshTasks);
@@ -280,6 +287,8 @@ export function TaskDataProvider({ children }: TaskDataProviderProps) {
     socket.connect();
 
     return () => {
+      clearInterval(resync);
+      socket.off("realtime.status", handleTransport);
       socket.off("connect", refreshTasks);
 
       for (const eventName of TASK_SOCKET_EVENTS) {

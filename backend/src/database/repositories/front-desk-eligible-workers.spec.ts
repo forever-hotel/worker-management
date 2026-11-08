@@ -18,7 +18,8 @@ describe('DDP-211 eligible-workers repository', () => {
       { workerId: 'worker-2', fullName: 'B Worker', vocation: 'MAINTENANCE', activeTaskCount: 0, maxActiveTasks: 2, remainingCapacity: 2 },
     ]);
     const sql = query.mock.calls[0][0] as string;
-    expect(sql).toContain("s.role = 'WORKER'");
+    expect(sql).toContain("s.roles && ARRAY['WORKER','ROOT']::text[]");
+    expect(sql).not.toContain("s.role = 'WORKER'");
     expect(sql).toContain('s.is_active = TRUE');
     expect(sql).toContain("status IN ('ASSIGNED', 'IN_PROGRESS')");
     expect(sql).toContain('max_active_tasks');

@@ -233,7 +233,7 @@ export class TaskRepository {
        FROM public.staff_users s
        CROSS JOIN policy p
        LEFT JOIN workload w ON w.assigned_worker_id = s.worker_id
-       WHERE s.role = 'WORKER'
+       WHERE s.roles && ARRAY['WORKER','ROOT']::text[]
          AND s.is_active = TRUE
          AND COALESCE(w.active_task_count, 0) < p.max_active_tasks
        ORDER BY COALESCE(w.active_task_count, 0) ASC,
@@ -298,7 +298,7 @@ export class TaskRepository {
         `SELECT worker_id
          FROM staff_users
          WHERE worker_id = $1
-           AND role = $2
+           AND roles && ARRAY[$2,'ROOT']::text[]
            AND is_active = TRUE
            FOR UPDATE`,
         [workerId, 'WORKER'],
@@ -319,7 +319,10 @@ export class TaskRepository {
 
       const activeTaskCount = Number(activeTasksResult.rows[0].count);
 
-      if (activeTaskCount >= Number(activeTasksResult.rows[0]?.max_active_tasks ?? 3)) {
+      if (
+        activeTaskCount >=
+        Number(activeTasksResult.rows[0]?.max_active_tasks ?? 3)
+      ) {
         throw new Error('ACTIVE_TASK_LIMIT_REACHED');
       }
 
@@ -376,7 +379,7 @@ export class TaskRepository {
         `SELECT worker_id
          FROM staff_users
          WHERE worker_id = $1
-           AND role = 'WORKER'
+           AND roles && ARRAY['WORKER','ROOT']::text[]
            AND is_active = TRUE
          FOR UPDATE`,
         [workerId],
@@ -399,7 +402,9 @@ export class TaskRepository {
 
       const activeCount = Number(activeTasksResult.rows[0]?.count ?? 0);
 
-      if (activeCount >= Number(activeTasksResult.rows[0]?.max_active_tasks ?? 3)) {
+      if (
+        activeCount >= Number(activeTasksResult.rows[0]?.max_active_tasks ?? 3)
+      ) {
         throw new Error('ACTIVE_TASK_LIMIT_REACHED');
       }
 
@@ -696,7 +701,6 @@ export class TaskRepository {
     );
   }
 
-
   /**
    * Look up a committed offline action receipt.
    *
@@ -714,19 +718,14 @@ export class TaskRepository {
       action: 'START' | 'COMPLETE';
       response_body: unknown;
     }>(
-        `SELECT action, response_body
+      `SELECT action, response_body
        FROM wkms_task_action_receipts
        WHERE request_id = $1::uuid
          AND task_id = $2::uuid
          AND worker_id = $3::uuid`,
-        [
-          input.requestId,
-          input.taskId,
-          input.workerId,
-        ],
+      [input.requestId, input.taskId, input.workerId],
     );
 
     return result.rows[0] ?? null;
   }
-
 }

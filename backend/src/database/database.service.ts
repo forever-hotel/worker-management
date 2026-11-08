@@ -26,8 +26,8 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     // Handle unexpected errors from idle PostgreSQL clients.
     // Without this listener, an idle connection error can
     // terminate the Node.js process.
-    this.pool.on('error', (error: Error) => {
-      this.logger.error(`PostgreSQL idle connection error: ${error.message}`);
+    this.pool.on('error', () => {
+      this.logger.error({ event: 'postgres_idle_connection_error' });
     });
   }
 

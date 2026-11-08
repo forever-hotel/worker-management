@@ -6,27 +6,15 @@ import { CheckoutCompletedHandler } from './handlers/checkout-completed.handler'
 import { OutboxDispatcherService } from './outbox/outbox-dispatcher.service';
 import { TaskEscalatedPublisher } from './publishers/task-escalated.publisher';
 
-import {
-  createRabbitMqConfig,
-  RABBITMQ_CONFIG,
-} from './rabbitmq/rabbitmq.config';
+import { RabbitMqModule } from './rabbitmq/rabbitmq.module';
 
-import { RabbitMqService } from './rabbitmq/rabbitmq.service';
 import { OrderReadyHandler } from './handlers/order-ready.handler';
 import { OrderReadyConsumer } from './consumers/order-ready.consumer';
 import { RealtimeModule } from '../realtime/realtime.module';
 
 @Module({
-  imports: [ConfigModule, RealtimeModule],
+  imports: [ConfigModule, RealtimeModule, RabbitMqModule],
   providers: [
-    {
-      provide: RABBITMQ_CONFIG,
-      inject: [ConfigService],
-      useFactory: createRabbitMqConfig,
-    },
-
-    // Existing RabbitMQ publisher and escalation infrastructure
-    RabbitMqService,
     TaskEscalatedPublisher,
     OutboxDispatcherService,
 
@@ -38,6 +26,6 @@ import { RealtimeModule } from '../realtime/realtime.module';
     OrderReadyHandler,
     OrderReadyConsumer,
   ],
-  exports: [RabbitMqService, TaskEscalatedPublisher],
+  exports: [RabbitMqModule, TaskEscalatedPublisher],
 })
 export class MessagingModule {}

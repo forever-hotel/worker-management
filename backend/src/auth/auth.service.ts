@@ -1,89 +1,76 @@
 import {
-    Injectable,
-    UnauthorizedException,
+  Injectable,
+  UnauthorizedException,
+  ForbiddenException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
-import { compare } from 'bcryptjs';
-import {DEFAULT_JWT_EXPIRES_IN_SECONDS, ENV_KEYS} from '../config/constants';
-import { StaffUserRepository } from '../database/repositories/staff-user.repository';
 import type { LoginRequestDto } from './dto/login-request.dto';
-import {WorkerJwtPayload} from "./types/worker-jwt-payload";
+
+export interface StaffSession {
+  sub: string;
+  username: string;
+  role: string;
+  roles: string[];
+  expiresAt: number;
+  passwordChangeRequired: boolean;
+}
 
 @Injectable()
 export class AuthService {
-    constructor(
-        private readonly staffUserRepository: StaffUserRepository,
-        private readonly jwtService: JwtService,
-        private readonly configService: ConfigService,
-    ) {}
+  constructor(private readonly config: ConfigService) {}
 
-    async login(input: LoginRequestDto) {
-        const username = input?.username?.trim();
-        const password = input?.password;
-
-        if (
-            !username ||
-            typeof password !== 'string' ||
-            password.length === 0
-        ) {
-            throw new UnauthorizedException(
-                'Invalid username or password',
-            );
-        }
-
-        const user =
-            await this.staffUserRepository.findByUsername(
-                username,
-            );
-
-        if (!user) {
-            throw new UnauthorizedException(
-                'Invalid username or password',
-            );
-        }
-
-        const passwordMatches = await compare(
-            password,
-            user.password_hash,
-        );
-
-        if (!passwordMatches) {
-            throw new UnauthorizedException(
-                'Invalid username or password',
-            );
-        }
-
-        if (!user.is_active || user.role !== 'WORKER') {
-            throw new UnauthorizedException(
-                'Invalid username or password',
-            );
-        }
-
-        const payload: WorkerJwtPayload = {
-            sub: user.worker_id,
-            username: user.username,
-            role: 'WORKER',
-        };
-
-        const accessToken =
-            await this.jwtService.signAsync(payload);
-
-        const expiresInSeconds =
-            this.configService.get<number>(
-                ENV_KEYS.JWT_EXPIRES_IN_SECONDS,
-            ) ?? DEFAULT_JWT_EXPIRES_IN_SECONDS;
-
-        return {
-            access_token: accessToken,
-            token_type: 'Bearer',
-            expires_in: expiresInSeconds,
-            worker: {
-                worker_id: user.worker_id,
-                full_name: user.full_name,
-                username: user.username,
-                role: 'WORKER' as const,
-            },
-        };
+  private async call(path: string, token?: string, body?: unknown) {
+    try {
+      const origin = this.config.getOrThrow<string>('AUTH_SERVICE_URL');
+      const response = await fetch(origin + '/wkms/auth/' + path, {
+        method: body === undefined ? 'GET' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: 'Bearer ' + token } : {}),
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        signal: AbortSignal.timeout(12000),
+        redirect: 'error',
+      });
+      const data = await response.json();
+      if (response.status === 401) throw new UnauthorizedException();
+      if (response.status === 403) throw new ForbiddenException(data);
+      if (!response.ok) throw new ServiceUnavailableException();
+      return data;
+    } catch (error) {
+      if (
+        error instanceof UnauthorizedException ||
+        error instanceof ForbiddenException
+      )
+        throw error;
+      throw new ServiceUnavailableException(
+        'Staff authentication is unavailable',
+      );
     }
+  }
+
+  login(input: LoginRequestDto) {
+    return this.call('login', undefined, input);
+  }
+
+  async session(token: string): Promise<StaffSession> {
+    const session = (await this.call('session', token)) as StaffSession;
+    if (
+      !session ||
+      typeof session.sub !== 'string' ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        session.sub,
+      ) ||
+      typeof session.username !== 'string' ||
+      !Array.isArray(session.roles) ||
+      !['WORKER', 'ROOT'].includes(session.role) ||
+      !Number.isSafeInteger(session.expiresAt) ||
+      session.expiresAt * 1000 <= Date.now()
+    )
+      throw new UnauthorizedException();
+    if (session.passwordChangeRequired !== false)
+      throw new ForbiddenException({ code: 'PASSWORD_CHANGE_REQUIRED' });
+    return session;
+  }
 }

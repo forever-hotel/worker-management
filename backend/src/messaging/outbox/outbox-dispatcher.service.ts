@@ -17,7 +17,7 @@ type DispatchResult = 'EMPTY' | 'PUBLISHED' | 'FAILED';
 export class OutboxDispatcherService {
   private readonly logger = new Logger(OutboxDispatcherService.name);
 
-  private readonly batchSize = 10;
+  private readonly batchSize = 100;
   private dispatching = false;
 
   constructor(
@@ -25,7 +25,7 @@ export class OutboxDispatcherService {
     private readonly rabbitMqService: RabbitMqService,
   ) {}
 
-  @Interval(60_000)
+  @Interval(250)
   async dispatchPendingEvents(): Promise<void> {
     if (!this.rabbitMqService.isEnabled()) {
       return;
@@ -69,7 +69,7 @@ export class OutboxDispatcherService {
        WHERE status = 'PENDING'
          AND (
            last_attempt_at IS NULL
-           OR last_attempt_at <= NOW() - INTERVAL '60 seconds'
+           OR last_attempt_at <= NOW() - LEAST(60, power(2, LEAST(attempt_count, 6))) * INTERVAL '1 second'
          )
        ORDER BY created_at, event_id
        FOR UPDATE SKIP LOCKED
@@ -83,11 +83,20 @@ export class OutboxDispatcherService {
     }
 
     try {
-      await this.rabbitMqService.publishJson(
-        event.routing_key,
-        event.payload,
-        event.event_id,
-      );
+      if (event.routing_key === 'task.changed') {
+        await this.rabbitMqService.publishJson(
+          event.routing_key,
+          event.payload,
+          event.event_id,
+          'hotel.events',
+        );
+      } else {
+        await this.rabbitMqService.publishJson(
+          event.routing_key,
+          event.payload,
+          event.event_id,
+        );
+      }
     } catch {
       await client.query(
         `UPDATE wkms_event_outbox

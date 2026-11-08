@@ -1,9 +1,9 @@
 ﻿import { Module } from '@nestjs/common';
-import { AuthModule } from '../auth/auth.module';
+import { RabbitMqModule } from '../messaging/rabbitmq/rabbitmq.module';
 import { WkmsRealtimeGateway } from './wkms-realtime.gateway';
 
 @Module({
-  imports: [AuthModule],
+  imports: [RabbitMqModule],
   providers: [WkmsRealtimeGateway],
   exports: [WkmsRealtimeGateway],
 })

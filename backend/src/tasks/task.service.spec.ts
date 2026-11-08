@@ -8,16 +8,20 @@ import { TaskService } from './task.service';
 
 
 const emitTaskClaimed = jest.fn<(taskId: string) => void>();
+const emitTaskUpdated = jest.fn<(taskId: string) => void>();
+const emitTaskCompleted = jest.fn<(taskId: string) => void>();
 
 function createTaskService(repository: TaskRepository): TaskService {
   return new TaskService(
     repository,
-    { emitTaskClaimed } as unknown as ConstructorParameters<typeof TaskService>[1],
+    { emitTaskClaimed, emitTaskUpdated, emitTaskCompleted } as unknown as ConstructorParameters<typeof TaskService>[1],
   );
 }
 
 beforeEach(() => {
   emitTaskClaimed.mockClear();
+  emitTaskUpdated.mockClear();
+  emitTaskCompleted.mockClear();
 });
 type FindAllMock = () => Promise<unknown[]>;
 
@@ -250,6 +254,7 @@ describe('TaskService', () => {
     expect(result).toEqual(
         startedTask,
     );
+    expect(emitTaskUpdated).toHaveBeenCalledWith('task-1');
   });
 
   it('should complete an in-progress task successfully', async () => {
@@ -288,6 +293,7 @@ describe('TaskService', () => {
     expect(result).toEqual(
         completedTask,
     );
+    expect(emitTaskCompleted).toHaveBeenCalledWith('task-1');
   });
 
   it('should return not found when starting a missing task', async () => {

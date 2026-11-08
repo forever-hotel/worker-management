@@ -13,11 +13,27 @@ export function AppHeader({ title }: AppHeaderProps) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const handleLogout = () => {
-    clearAuthSession();
-    setMenuOpen(false);
-    router.replace("/login");
-    router.refresh();
+  const [logoutError, setLogoutError] = useState("");
+  const [signingOut, setSigningOut] = useState(false);
+  const handleLogout = async () => {
+    setSigningOut(true);
+    setLogoutError("");
+    try {
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      if (!response.ok && response.status !== 401) throw new Error();
+      clearAuthSession();
+      setMenuOpen(false);
+      router.replace("/login");
+      router.refresh();
+    } catch {
+      setLogoutError("Unable to sign out. Please retry.");
+    } finally {
+      setSigningOut(false);
+    }
   };
 
   const workerName = getAuthSession()?.worker.full_name ?? "Worker";
@@ -49,15 +65,24 @@ export function AppHeader({ title }: AppHeaderProps) {
               id="worker-profile-menu"
               className="absolute right-0 top-full z-50 mt-2 w-48 rounded-lg border border-wkms-border bg-white p-2 text-wkms-navy shadow-lg"
             >
-              <p className="truncate px-3 py-2 text-xs font-medium" title={workerName}>
+              <p
+                className="truncate px-3 py-2 text-xs font-medium"
+                title={workerName}
+              >
                 {workerName}
               </p>
+              {logoutError && (
+                <p role="alert" className="text-xs text-red-700 px-3">
+                  {logoutError}
+                </p>
+              )}
               <button
                 type="button"
                 onClick={handleLogout}
+                disabled={signingOut}
                 className="w-full rounded-md px-3 py-2 text-left text-sm font-medium text-red-600 cursor-pointer hover:bg-red-50 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-wkms-gold"
               >
-                Log out
+                {signingOut ? "Signing out..." : "Log out"}
               </button>
             </div>
           )}
@@ -66,4 +91,3 @@ export function AppHeader({ title }: AppHeaderProps) {
     </header>
   );
 }
-

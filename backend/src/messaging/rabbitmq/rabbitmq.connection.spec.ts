@@ -140,7 +140,20 @@ describe('RabbitMqService connection initialization', () => {
     ).resolves.toBeUndefined();
 
     expect(mockConnect).toHaveBeenCalledTimes(2);
-    expect(healthyBroker.assertExchange).toHaveBeenCalledTimes(1);
+    // Recovery declares the default exchange, then publishing asserts its target.
+    expect(healthyBroker.assertExchange).toHaveBeenCalledTimes(2);
+    expect(healthyBroker.assertExchange).toHaveBeenNthCalledWith(
+      1,
+      'forever.events',
+      'topic',
+      { durable: true },
+    );
+    expect(healthyBroker.assertExchange).toHaveBeenNthCalledWith(
+      2,
+      'forever.events',
+      'topic',
+      { durable: true },
+    );
     expect(healthyBroker.publish).toHaveBeenCalledTimes(1);
 
     await service.onApplicationShutdown();

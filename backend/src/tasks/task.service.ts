@@ -147,7 +147,9 @@ export class TaskService {
 
   async startTask(taskId: string, workerId: string) {
     try {
-      return await this.taskRepository.startTask(taskId, workerId);
+      const task = await this.taskRepository.startTask(taskId, workerId);
+      this.realtimeGateway.emitTaskUpdated(taskId);
+      return task;
     } catch (error) {
       this.handleLifecycleError(error);
     }
@@ -155,7 +157,9 @@ export class TaskService {
 
   async completeTask(taskId: string, workerId: string) {
     try {
-      return await this.taskRepository.completeTask(taskId, workerId);
+      const task = await this.taskRepository.completeTask(taskId, workerId);
+      this.realtimeGateway.emitTaskCompleted(taskId);
+      return task;
     } catch (error) {
       this.handleLifecycleError(error);
     }
@@ -227,6 +231,10 @@ export class TaskService {
           action: input.action,
         });
 
+      if (!replayed) {
+        if (input.action === 'START') this.realtimeGateway.emitTaskUpdated(input.taskId);
+        else this.realtimeGateway.emitTaskCompleted(input.taskId);
+      }
       return {
         task: result,
         replayed,

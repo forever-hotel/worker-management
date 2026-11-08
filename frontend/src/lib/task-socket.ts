@@ -1,28 +1,46 @@
 ﻿import { io, type Socket } from "socket.io-client";
 
-import { getAccessToken } from "@/lib/auth-session";
+import { getAuthSession } from "@/lib/auth-session";
 
 export const TASK_SOCKET_EVENTS = [
   "task.created",
   "task.claimed",
   "task.escalated",
+  "task.updated",
+  "task.completed",
 ] as const;
 
 export function connectTaskSocket(): Socket | null {
-  const token = getAccessToken();
+  const session = getAuthSession();
 
-  const baseUrl =
-    process.env.NEXT_PUBLIC_WKMS_SOCKET_URL?.trim();
+  const baseUrl = process.env.NEXT_PUBLIC_WKMS_SOCKET_URL?.trim();
 
-  if (!token || !baseUrl) {
+  if (!session || !baseUrl) {
     return null;
   }
 
-  const socket = io(`${baseUrl.replace(/\/+$/, "")}/wkms`, {
-    auth: { token },
+  const socket = io(baseUrl.replace(/\/+$/, ""), {
+    path: "/realtime/socket.io",
+    auth: (callback) => {
+      void fetch("/api/auth/socket-ticket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+        cache: "no-store",
+        signal: AbortSignal.timeout(15000),
+      })
+        .then(async (response) => {
+          if (!response.ok) throw new Error();
+          const body = await response.json();
+          if (typeof body.ticket !== "string") throw new Error();
+          callback({ ticket: body.ticket });
+        })
+        .catch(() => callback({ ticket: "" }));
+    },
+    withCredentials: false,
     autoConnect: false,
     reconnection: true,
-    reconnectionAttempts: Infinity,
+    reconnectionAttempts: 5,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
     transports: ["websocket"],
