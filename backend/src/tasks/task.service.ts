@@ -279,6 +279,11 @@ export class TaskService {
           'Task cannot be transitioned from its current status',
         );
 
+      case 'FOOD_ORDER_NOT_READY_FOR_DELIVERY':
+        throw new ConflictException(
+          'The linked kitchen order is not ready for delivery. Refresh the task before retrying.',
+        );
+
       default:
         throw error;
     }

@@ -598,6 +598,23 @@ export class TaskRepository {
       throw new Error('TASK_COMPLETION_UPDATE_FAILED');
     }
 
+    if (completedTask.category === 'FOOD_DELIVERY') {
+      const delivery = await client.query(
+        `UPDATE public.kms_food_orders
+         SET status = 'DELIVERED',
+             delivered_at = COALESCE(delivered_at, NOW()),
+             updated_at = NOW()
+         WHERE order_id = $1::uuid
+           AND room_number = $2
+           AND status IN ('READY', 'DELIVERED')
+         RETURNING order_id`,
+        [completedTask.food_order_id, completedTask.room_number],
+      );
+      if (delivery.rows.length !== 1) {
+        throw new Error('FOOD_ORDER_NOT_READY_FOR_DELIVERY');
+      }
+    }
+
     await appendTaskAudit(client, {
       taskId,
       action: 'TASK_COMPLETED',
