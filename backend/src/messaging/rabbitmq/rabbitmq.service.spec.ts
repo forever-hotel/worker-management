@@ -255,8 +255,12 @@ describe('RabbitMqService', () => {
       ),
     ).rejects.toThrow('RabbitMQ message was returned as unroutable');
 
-    expect(context.close).toHaveBeenCalledTimes(1);
+    expect(context.close).not.toHaveBeenCalled();
     expect(context.off).toHaveBeenCalledWith('return', expect.any(Function));
+    // A missing consumer must not tear down other publications sharing this connection.
+    await expect(
+      context.service.publishJson('another.route', {}),
+    ).resolves.toBeUndefined();
   });
 
   it('ignores returned messages belonging to a different publication', async () => {

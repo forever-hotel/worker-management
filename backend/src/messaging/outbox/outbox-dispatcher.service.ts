@@ -3,7 +3,10 @@ import { Interval } from '@nestjs/schedule';
 import type { PoolClient, QueryResultRow } from 'pg';
 
 import { DatabaseService } from '../../database/database.service';
-import { RabbitMqService } from '../rabbitmq/rabbitmq.service';
+import {
+  RabbitMqService,
+  RabbitMqPublishError,
+} from '../rabbitmq/rabbitmq.service';
 
 interface PendingOutboxEvent extends QueryResultRow {
   event_id: string;
@@ -97,7 +100,17 @@ export class OutboxDispatcherService {
           event.event_id,
         );
       }
-    } catch {
+    } catch (error) {
+      this.logger.warn({
+        event: 'outbox_publish_failed',
+        reason:
+          error instanceof RabbitMqPublishError
+            ? error.reason
+            : 'PUBLISH_FAILED',
+        routingKey: /^[a-z0-9_.-]{1,150}$/.test(event.routing_key)
+          ? event.routing_key
+          : '(invalid)',
+      });
       await client.query(
         `UPDATE wkms_event_outbox
          SET attempt_count = attempt_count + 1,
