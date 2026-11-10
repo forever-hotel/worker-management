@@ -11,6 +11,15 @@ import type { ChannelModel, ConfirmChannel } from 'amqplib';
 import { RABBITMQ_CONFIG, type RabbitMqRuntimeConfig } from './rabbitmq.config';
 import { randomUUID } from 'node:crypto';
 
+export class RabbitMqPublishError extends Error {
+  constructor(
+    readonly reason: 'UNROUTABLE' | 'CONFIRM_TIMEOUT',
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
 @Injectable()
 export class RabbitMqService implements OnModuleInit, OnApplicationShutdown {
   private readonly logger = new Logger(RabbitMqService.name);
@@ -66,7 +75,8 @@ export class RabbitMqService implements OnModuleInit, OnApplicationShutdown {
         },
         (error) => {
           clearTimeout(timeout);
-          error ? reject(error) : resolve();
+          if (error) reject(error);
+          else resolve();
         },
       );
     });
@@ -126,23 +136,36 @@ export class RabbitMqService implements OnModuleInit, OnApplicationShutdown {
 
         new Promise<never>((_, reject) => {
           timeout = setTimeout(() => {
-            reject(new Error('RabbitMQ publisher confirmation timed out'));
+            reject(
+              new RabbitMqPublishError(
+                'CONFIRM_TIMEOUT',
+                'RabbitMQ publisher confirmation timed out',
+              ),
+            );
           }, 15_000);
         }),
       ]);
 
       if (wasReturned) {
-        throw new Error('RabbitMQ message was returned as unroutable');
+        throw new RabbitMqPublishError(
+          'UNROUTABLE',
+          'RabbitMQ message was returned as unroutable',
+        );
       }
     } catch (error) {
       // Discard the connection after an uncertain publish result.
       // The outbox will retry using a fresh connection.
-      if (this.connection === connection) {
-        this.connection = null;
-        this.channel = null;
+      // A returned message has a definite routing failure, not a broken connection.
+      // Retain it in the outbox and reuse the connection for other deliverable events.
+      if (!(
+        error instanceof RabbitMqPublishError && error.reason === 'UNROUTABLE'
+      )) {
+        if (this.connection === connection) {
+          this.connection = null;
+          this.channel = null;
+        }
+        void connection.close().catch(() => undefined);
       }
-
-      void connection.close().catch(() => undefined);
 
       throw error;
     } finally {
