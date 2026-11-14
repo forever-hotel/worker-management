@@ -82,7 +82,7 @@ export function ShiftDashboardScreen() {
 
         {summary && (
           <>
-            <section className="rounded-xl bg-wkms-navy px-3 py-3 text-white shadow-sm sm:px-4 sm:py-3.5">
+            <section className="rounded-[10px] bg-wkms-navy px-3 py-3 text-white shadow-none sm:px-4 sm:py-3.5">
               <div className="flex items-center gap-3">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-wkms-gold bg-white/10 text-sm font-semibold sm:h-12 sm:w-12">
                   {summary.worker.full_name.charAt(0).toUpperCase()}
@@ -109,22 +109,22 @@ export function ShiftDashboardScreen() {
             </section>
 
             <section className="mt-4 sm:mt-5">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 sm:text-xs">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5a5650] sm:text-xs">
                 Today&apos;s Summary
               </p>
 
               <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
-                <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+                <div className="rounded-[10px] border border-[#ddd8cf] bg-white p-3 shadow-none sm:p-4">
                   <p className="text-2xl font-semibold text-wkms-navy sm:text-3xl">
                     {summary.completed_task_count}
                   </p>
 
-                  <p className="mt-2 text-xs text-slate-500 sm:text-sm">
+                  <p className="mt-2 text-xs text-[#5a5650] sm:text-sm">
                     Tasks completed
                   </p>
                 </div>
 
-                <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+                <div className="rounded-[10px] border border-[#ddd8cf] bg-white p-3 shadow-none sm:p-4">
                   <p className="text-2xl font-semibold text-wkms-gold sm:text-3xl">
                     {summary.average_task_turnaround_seconds === null
                       ? "—"
@@ -133,27 +133,27 @@ export function ShiftDashboardScreen() {
                         )}m`}
                   </p>
 
-                  <p className="mt-2 text-xs text-slate-500 sm:text-sm">
+                  <p className="mt-2 text-xs text-[#5a5650] sm:text-sm">
                     Avg. turnaround
                   </p>
                 </div>
 
-                <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+                <div className="rounded-[10px] border border-[#ddd8cf] bg-white p-3 shadow-none sm:p-4">
                   <p className="text-2xl font-semibold text-wkms-navy sm:text-3xl">
                     {summary.active_task_count}
                   </p>
 
-                  <p className="mt-2 text-xs text-slate-500 sm:text-sm">
+                  <p className="mt-2 text-xs text-[#5a5650] sm:text-sm">
                     Active now
                   </p>
                 </div>
 
-                <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+                <div className="rounded-[10px] border border-[#ddd8cf] bg-white p-3 shadow-none sm:p-4">
                   <p className="text-2xl font-semibold text-wkms-green sm:text-3xl">
                     {summary.available_escalated_task_count}
                   </p>
 
-                  <p className="mt-2 text-xs text-slate-500 sm:text-sm">
+                  <p className="mt-2 text-xs text-[#5a5650] sm:text-sm">
                     Available escalated
                   </p>
                 </div>
@@ -161,14 +161,14 @@ export function ShiftDashboardScreen() {
             </section>
 
             <section className="mt-5 pb-4 sm:mt-6">
-              <div className="mb-2 border-t border-slate-200 pt-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 sm:text-xs">
+              <div className="mb-2 border-t border-[#ddd8cf] pt-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5a5650] sm:text-xs">
                   Completed Task History
                 </p>
               </div>
 
               {summary.completed_tasks.length > 0 ? (
-                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                <div className="overflow-hidden rounded-[10px] border border-[#ddd8cf] bg-white shadow-none">
                   {summary.completed_tasks.map((task, index) => (
                     <Link
                       key={task.task_id}
@@ -176,14 +176,14 @@ export function ShiftDashboardScreen() {
                       aria-label={`View details for ${categoryLabels[task.category]} task in Room ${task.room_number}`}
                       className={[
                         "flex items-center gap-3 px-3 py-2.5 sm:px-4 sm:py-3",
-                        "transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-wkms-navy",
+                        "transition-colors hover:bg-[#f9f7f4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-wkms-navy",
 
                         index !== summary.completed_tasks.length - 1
-                          ? "border-b border-slate-100"
+                          ? "border-b border-[#ddd8cf]"
                           : "",
                       ].join(" ")}
                     >
-                      <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-slate-100 sm:h-11 sm:w-11">
+                      <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-[#e8eef4] sm:h-11 sm:w-11">
                         <Image
                           src={taskCategoryImages[task.category]}
                           alt={categoryLabels[task.category]}
@@ -194,16 +194,16 @@ export function ShiftDashboardScreen() {
                       </div>
 
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-semibold text-slate-800 sm:text-sm">
+                        <p className="truncate text-xs font-semibold text-[#1a1a18] sm:text-sm">
                           {task.task_id} · {categoryLabels[task.category]}
                         </p>
 
-                        <p className="mt-0.5 text-[11px] text-slate-500 sm:text-xs">
+                        <p className="mt-0.5 text-[11px] text-[#5a5650] sm:text-xs">
                           Room {task.room_number}
                         </p>
                       </div>
 
-                      <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-600 sm:text-xs">
+                      <span className="shrink-0 rounded-full border border-[#ddd8cf] bg-[#f9f7f4] px-2.5 py-1 text-[11px] font-medium text-[#5a5650] sm:text-xs">
                         {Math.round(task.turnaround_seconds / 60)} min
                         turnaround
                       </span>
@@ -211,14 +211,14 @@ export function ShiftDashboardScreen() {
                   ))}
                 </div>
               ) : (
-                <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center">
+                <div className="rounded-[10px] border border-dashed border-[#ddd8cf] bg-white px-4 py-8 text-center">
                   <p className="text-sm font-medium text-wkms-navy">
                     No completed tasks today
                   </p>
                 </div>
               )}
 
-              <p className="mt-3 text-xs text-slate-500">
+              <p className="mt-3 text-xs text-[#5a5650]">
                 Turnaround is calculated from submitted time to completion time.
               </p>
             </section>

@@ -579,7 +579,7 @@ export function MyTasksScreen() {
         )}
           <section>
             <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-xs font-semibold tracking-[0.1em] text-slate-500 sm:text-sm">
+              <h2 className="text-xs font-semibold tracking-[0.1em] text-[#5a5650] sm:text-sm">
                 ACTIVE — {activeTasks.length} OF {maxActiveTasks === null ? "â€”" : maxActiveTasks ?? 3} SLOTS USED
               </h2>
             </div>
@@ -610,12 +610,12 @@ export function MyTasksScreen() {
                   ))}
                 </div>
             ) : (
-                <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center sm:py-10">
+                <div className="rounded-[10px] border border-dashed border-[#ddd8cf] bg-white px-4 py-8 text-center sm:py-10">
                   <p className="text-sm font-medium text-wkms-navy">
                     No active tasks
                   </p>
 
-                  <p className="mt-1 text-xs text-slate-500 sm:text-sm">
+                  <p className="mt-1 text-xs text-[#5a5650] sm:text-sm">
                     Claim a task from the Queue to start working.
                   </p>
                 </div>
@@ -641,8 +641,8 @@ export function MyTasksScreen() {
             COMPLETED TASKS
         ========================================== */}
 
-          <section className="mt-6 border-t border-slate-200 pt-5 sm:mt-8">
-            <h2 className="text-xs font-semibold tracking-[0.1em] text-slate-500 sm:text-sm">
+          <section className="mt-6 border-t border-[#ddd8cf] pt-5 sm:mt-8">
+            <h2 className="text-xs font-semibold tracking-[0.1em] text-[#5a5650] sm:text-sm">
               COMPLETED TODAY
             </h2>
 
@@ -682,7 +682,7 @@ export function MyTasksScreen() {
             {!completedLoading &&
                 !completedError &&
                 completedTasks.length === 0 && (
-                    <div className="mt-3 rounded-xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center">
+                    <div className="mt-3 rounded-[10px] border border-dashed border-[#ddd8cf] bg-white px-4 py-8 text-center">
                       <p className="text-sm font-medium text-wkms-navy">
                         No completed tasks today
                       </p>
@@ -697,7 +697,7 @@ export function MyTasksScreen() {
             {!completedLoading &&
                 !completedError &&
                 completedTasks.length > 0 && (
-                    <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                    <div className="mt-3 overflow-hidden rounded-[10px] border border-[#ddd8cf] bg-white shadow-none">
                       {completedTasks.map((task, index) => (
                           <Link
                               key={task.task_id}
@@ -705,15 +705,15 @@ export function MyTasksScreen() {
                               aria-label={`View completed task for Room ${task.room_number}`}
                               className={[
                                 "flex items-center gap-3 px-3 py-2.5 sm:px-4 sm:py-3",
-                                "transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-wkms-navy",
+                                "transition-colors hover:bg-[#f9f7f4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-wkms-navy",
                                 index !== completedTasks.length - 1
-                                    ? "border-b border-slate-100"
+                                    ? "border-b border-[#ddd8cf]"
                                     : "",
                               ].join(" ")}
                           >
                             {/* Category image */}
 
-                            <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-slate-100 sm:h-11 sm:w-11">
+                            <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-[#e8eef4] sm:h-11 sm:w-11">
                               <Image
                                   src={taskCategoryImages[task.category]}
                                   alt={categoryLabels[task.category]}
@@ -726,18 +726,18 @@ export function MyTasksScreen() {
                             {/* Task information */}
 
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-xs font-semibold text-slate-800 sm:text-sm">
+                              <p className="truncate text-xs font-semibold text-[#1a1a18] sm:text-sm">
                                 {task.task_id} · {categoryLabels[task.category]}
                               </p>
 
-                              <p className="mt-0.5 text-[11px] text-slate-500 sm:text-xs">
+                              <p className="mt-0.5 text-[11px] text-[#5a5650] sm:text-xs">
                                 Room {task.room_number}
                               </p>
                             </div>
 
                             {/* Turnaround badge */}
 
-                            <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-600 sm:text-xs">
+                            <span className="shrink-0 rounded-full border border-[#ddd8cf] bg-[#f9f7f4] px-2.5 py-1 text-[11px] font-medium text-[#5a5650] sm:text-xs">
                       {Math.round(task.turnaround_seconds / 60)} min
                       turnaround
                     </span>

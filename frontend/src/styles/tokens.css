@@ -1,6 +1,6 @@
 :root {
     --background: #f5f3ef;
-    --foreground: #12263a;
+    --foreground: #1a1a18;
 
     --wkms-status-bar: #12263a;
     --wkms-navy: #1a3c5e;
@@ -9,7 +9,7 @@
     --wkms-soft-blue: #e8eef4;
     --wkms-gold: #c9920d;
     --wkms-green: #1a6b3c;
-    --wkms-border: #d0d8cf;
+    --wkms-border: #ddd8cf;
 }
 
 @theme inline {

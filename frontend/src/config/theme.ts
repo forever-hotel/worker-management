@@ -1,0 +1,67 @@
+import type { ThemeConfig } from "antd";
+
+// MAD is the visual reference: navy/neutral surfaces, compact type and restrained corners.
+export const wkmsTheme: ThemeConfig = {
+    token: {
+        colorPrimary: "#1a3c5e",
+        colorPrimaryHover: "#2e5f8a",
+        colorLink: "#1a3c5e",
+        colorInfo: "#1a3c5e",
+        colorSuccess: "#1a6b3c",
+        colorWarning: "#7a4f00",
+        colorError: "#8b1a1a",
+        colorBgBase: "#ffffff",
+        colorBgLayout: "#f5f3ef",
+        colorBgContainer: "#ffffff",
+        colorBgElevated: "#ffffff",
+        colorText: "#1a1a18",
+        colorTextSecondary: "#5a5650",
+        colorBorder: "#ddd8cf",
+        colorBorderSecondary: "#ddd8cf",
+        fontFamily: "var(--font-inter, Inter), 'Segoe UI', Arial, sans-serif",
+        fontSize: 13,
+        lineHeight: 1.5,
+        fontWeightStrong: 600,
+        borderRadius: 6,
+        borderRadiusLG: 10,
+        borderRadiusSM: 4,
+        controlHeight: 44,
+        controlHeightLG: 44,
+        controlHeightSM: 32,
+    },
+    components: {
+        Button: {
+            primaryShadow: "none",
+            defaultShadow: "none",
+            fontWeight: 500,
+            defaultColor: "#1a3c5e",
+            defaultBorderColor: "#1a3c5e",
+        },
+        Input: {
+            activeBorderColor: "#2e5f8a",
+            hoverBorderColor: "#2e5f8a",
+            activeShadow: "0 0 0 3px #e8eef4",
+        },
+        Select: {
+            activeBorderColor: "#2e5f8a",
+            hoverBorderColor: "#2e5f8a",
+            activeOutlineColor: "#e8eef4",
+        },
+        Card: { bodyPadding: 20, headerHeight: 56, headerFontSize: 14 },
+        Form: {
+            labelFontSize: 12,
+            labelColor: "#5a5650",
+            itemMarginBottom: 18,
+        },
+        Table: {
+            headerBg: "#f9f7f4",
+            headerColor: "#5a5650",
+            borderColor: "#ddd8cf",
+            rowHoverBg: "#e8eef4",
+            cellPaddingBlock: 12,
+            cellPaddingInline: 11,
+            cellFontSize: 13,
+        },
+        Tag: { borderRadiusSM: 999 },
+    },
+};

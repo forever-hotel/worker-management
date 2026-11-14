@@ -1,9 +1,11 @@
+# syntax=docker/dockerfile:1
 FROM node:24-bookworm-slim AS build
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci
+RUN --mount=type=cache,id=wms-backend-npm,target=/root/.npm,sharing=locked \
+    npm ci --prefer-offline
 
 COPY tsconfig*.json nest-cli.json ./
 COPY src ./src
@@ -18,7 +20,8 @@ ENV NODE_ENV=production
 ENV PORT=4002
 
 COPY package*.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+RUN --mount=type=cache,id=wms-backend-npm,target=/root/.npm,sharing=locked \
+    npm ci --omit=dev --prefer-offline
 
 COPY --from=build /app/dist ./dist
 

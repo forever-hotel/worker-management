@@ -171,12 +171,12 @@ export function TaskQueueScreen() {
                 />
               ))
             ) : (
-              <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-10 text-center sm:py-14">
+              <div className="rounded-[10px] border border-dashed border-[#ddd8cf] bg-white px-5 py-10 text-center sm:py-14">
                 <p className="text-sm font-medium text-wkms-navy">
                   No tasks available
                 </p>
 
-                <p className="mt-1 text-xs text-slate-500 sm:text-sm">
+                <p className="mt-1 text-xs text-[#5a5650] sm:text-sm">
                   There are currently no tasks in this category.
                 </p>
               </div>
@@ -184,9 +184,9 @@ export function TaskQueueScreen() {
           </div>
         )}
 
-        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-center text-xs text-slate-500 sm:text-sm">
+        <div className="mt-3 rounded-lg border border-[#ddd8cf] bg-[#e8eef4] px-3 py-2 text-center text-xs text-[#5a5650] sm:text-sm">
           Active limit:{" "}
-          <span className="font-medium text-slate-600">{limitUnknown ? "Unavailable" : `${limit} tasks max`}</span>
+          <span className="font-medium text-[#5a5650]">{limitUnknown ? "Unavailable" : `${limit} tasks max`}</span>
           {" · "}
           You have {myTasksCount} active
         </div>

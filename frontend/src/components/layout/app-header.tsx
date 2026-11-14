@@ -63,7 +63,7 @@ export function AppHeader({ title }: AppHeaderProps) {
           {menuOpen && (
             <div
               id="worker-profile-menu"
-              className="absolute right-0 top-full z-50 mt-2 w-48 rounded-lg border border-wkms-border bg-white p-2 text-wkms-navy shadow-lg"
+              className="absolute right-0 top-full z-50 mt-2 w-48 rounded-lg border border-wkms-border bg-white p-2 text-wkms-navy shadow-none"
             >
               <p
                 className="truncate px-3 py-2 text-xs font-medium"

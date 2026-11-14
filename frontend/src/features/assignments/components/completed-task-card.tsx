@@ -41,14 +41,14 @@ export function CompletedTaskCard({ task }: CompletedTaskCardProps) {
           openTaskDetail();
         }
       }}
-      className="relative cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:shadow-md sm:p-4"
+      className="relative cursor-pointer overflow-hidden rounded-[10px] border border-[#ddd8cf] bg-white p-3 shadow-none transition hover:border-[#1a3c5e] sm:p-4"
     >
       <div
         className="pointer-events-none absolute inset-0 bg-emerald-50/30"
         aria-hidden="true"
       />
       <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-medium text-slate-600">{task.id}</span>
+        <span className="text-xs font-medium text-[#5a5650]">{task.id}</span>
 
         {isHighPriority ? (
           <Tag color="error" className="m-0 text-xs font-medium">
@@ -67,17 +67,17 @@ export function CompletedTaskCard({ task }: CompletedTaskCardProps) {
               Room {task.roomNumber}
             </span>
 
-            <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-600">
+            <span className="rounded-md border border-[#ddd8cf] bg-[#f9f7f4] px-2 py-1 text-xs text-[#5a5650]">
               {categoryLabels[task.category]}
             </span>
           </div>
 
-          <p className="mt-2 text-sm leading-5 text-slate-700">
+          <p className="mt-2 text-sm leading-5 text-[#1a1a18]">
             {task.description}
           </p>
         </div>
 
-        <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-slate-100 sm:h-14 sm:w-14">
+        <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-[#e8eef4] sm:h-14 sm:w-14">
           <Image
             src={imageSrc}
             alt={`${categoryLabels[task.category]} for Room ${task.roomNumber}`}
@@ -94,7 +94,7 @@ export function CompletedTaskCard({ task }: CompletedTaskCardProps) {
           ✓ Completed
         </span>
 
-        <span className="text-xs text-slate-500">
+        <span className="text-xs text-[#5a5650]">
           {task.completedAtLabel}
           {task.completionMinutes !== undefined &&
             ` · ${task.completionMinutes} min`}

@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM node:24-bookworm-slim AS build
 
 WORKDIR /app
@@ -11,7 +12,8 @@ ENV NEXT_PUBLIC_API_GATEWAY_URL=$NEXT_PUBLIC_API_GATEWAY_URL
 ENV NEXT_PUBLIC_WKMS_SOCKET_URL=$NEXT_PUBLIC_WKMS_SOCKET_URL
 
 COPY package*.json ./
-RUN npm ci
+RUN --mount=type=cache,id=wms-frontend-npm,target=/root/.npm,sharing=locked \
+    npm ci --prefer-offline
 
 COPY . .
 RUN npm run build

@@ -49,7 +49,7 @@ export function BottomNav({ activeTab }: BottomNavProps) {
                                 "flex min-h-16 flex-col items-center justify-center gap-1 px-2 text-xs transition-colors",
                                 isActive
                                     ? "font-semibold text-wkms-navy"
-                                    : "text-slate-500",
+                                    : "text-[#5a5650]",
                             ].join(" ")}
                         >
                             <Icon

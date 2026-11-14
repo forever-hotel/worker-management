@@ -41,7 +41,7 @@ export function TaskFilters({
                             "sm:px-4 sm:text-sm",
                             isActive
                                 ? "border-wkms-navy bg-wkms-navy text-white"
-                                : "border-slate-300 bg-white text-slate-600",
+                                : "border-[#ddd8cf] bg-white text-[#5a5650]",
                         ].join(" ")}
                     >
                         {filter.label}

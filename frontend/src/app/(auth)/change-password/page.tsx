@@ -33,7 +33,7 @@ export default function ChangePasswordPage() {
   }
   return (
     <main className="min-h-dvh bg-wkms-page flex items-center justify-center p-6">
-      <section className="w-full max-w-md rounded-xl bg-white border border-wkms-border p-8">
+      <section className="w-full max-w-md rounded-[10px] bg-white border border-wkms-border p-8">
         <h1 className="text-xl font-semibold text-wkms-navy mb-4">
           Change your initial password
         </h1>

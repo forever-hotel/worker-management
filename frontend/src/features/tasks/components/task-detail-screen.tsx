@@ -215,7 +215,7 @@ export function TaskDetailScreen({ taskId, from }: TaskDetailScreenProps) {
           <Alert type="error" showIcon title={error} className="mb-3" />
         )}
 
-        <section className="relative h-40 overflow-hidden rounded-xl bg-slate-200/60 sm:h-40 md:h-52 lg:h-60">
+        <section className="relative h-40 overflow-hidden rounded-[10px] bg-slate-200/60 sm:h-40 md:h-52 lg:h-60">
           <Image
             src={imageSrc}
             alt={`${categoryLabels[task.category]} for Room ${task.roomNumber}`}
@@ -237,82 +237,82 @@ export function TaskDetailScreen({ taskId, from }: TaskDetailScreenProps) {
           </div>
         </section>
 
-        <section className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <section className="mt-4 overflow-hidden rounded-[10px] border border-[#ddd8cf] bg-white">
           <div className="px-3 sm:px-4">
             <div className="flex items-center justify-between gap-4 py-3">
-              <span className="text-xs text-slate-500 sm:text-sm">Task ID</span>
+              <span className="text-xs text-[#5a5650] sm:text-sm">Task ID</span>
 
-              <span className="text-xs font-medium text-slate-800 sm:text-sm">
+              <span className="text-xs font-medium text-[#1a1a18] sm:text-sm">
                 {task.id}
               </span>
             </div>
 
-            <div className="border-b border-slate-100" />
+            <div className="border-b border-[#ddd8cf]" />
           </div>
 
           <div className="px-3 sm:px-4">
             <div className="flex items-center justify-between gap-4 py-3">
-              <span className="text-xs text-slate-500 sm:text-sm">
+              <span className="text-xs text-[#5a5650] sm:text-sm">
                 Category
               </span>
 
-              <span className="text-xs font-semibold text-slate-800 sm:text-sm">
+              <span className="text-xs font-semibold text-[#1a1a18] sm:text-sm">
                 {categoryLabels[task.category]}
               </span>
             </div>
 
-            <div className="border-b border-slate-100" />
+            <div className="border-b border-[#ddd8cf]" />
           </div>
 
           <div className="px-3 sm:px-4">
             <div className="flex items-center justify-between gap-4 py-3">
-              <span className="text-xs text-slate-500 sm:text-sm">
+              <span className="text-xs text-[#5a5650] sm:text-sm">
                 Priority
               </span>
 
-              <span className="text-xs font-medium text-slate-800 sm:text-sm">
+              <span className="text-xs font-medium text-[#1a1a18] sm:text-sm">
                 {task.priority === "HIGH" ? "High" : "Normal"}
               </span>
             </div>
 
-            <div className="border-b border-slate-100" />
+            <div className="border-b border-[#ddd8cf]" />
           </div>
 
           <div className="px-3 sm:px-4">
             <div className="flex items-center justify-between gap-4 py-3">
-              <span className="text-xs text-slate-500 sm:text-sm">
+              <span className="text-xs text-[#5a5650] sm:text-sm">
                 Submitted
               </span>
 
-              <span className="text-right text-xs font-medium text-slate-800 sm:text-sm">
+              <span className="text-right text-xs font-medium text-[#1a1a18] sm:text-sm">
                 {task.submittedAt}
               </span>
             </div>
           </div>
         </section>
 
-        <section className="mt-3 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 sm:text-xs">
+        <section className="mt-3 rounded-[10px] border border-[#ddd8cf] bg-white p-3 sm:p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5a5650] sm:text-xs">
             Task Description
           </p>
 
-          <p className="mt-2 text-sm leading-5 text-slate-700 sm:text-base sm:leading-6">
+          <p className="mt-2 text-sm leading-5 text-[#1a1a18] sm:text-base sm:leading-6">
             {task.description}
           </p>
         </section>
 
-        <section className="mt-3 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 sm:text-xs">
+        <section className="mt-3 rounded-[10px] border border-[#ddd8cf] bg-white p-3 sm:p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5a5650] sm:text-xs">
             Time since submitted
           </p>
 
-          <p className="mt-2 text-sm text-slate-700">
+          <p className="mt-2 text-sm text-[#1a1a18]">
             {task.elapsedMinutes} minutes
           </p>
 
           {isAvailable && (
             <>
-              <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#e8eef4]">
                 <div
                   className="h-full rounded-full bg-wkms-gold"
                   style={{
@@ -321,7 +321,7 @@ export function TaskDetailScreen({ taskId, from }: TaskDetailScreenProps) {
                 />
               </div>
 
-              <p className="mt-2 text-xs text-slate-500">
+              <p className="mt-2 text-xs text-[#5a5650]">
                 Unclaimed-task escalation threshold:{" "}
                 {ESCALATION_THRESHOLD_MINUTES} minutes
               </p>
@@ -379,7 +379,7 @@ export function TaskDetailScreen({ taskId, from }: TaskDetailScreenProps) {
           )}
 
           {task.status === "COMPLETED" && (
-            <div className="rounded-xl bg-green-50 px-4 py-3 text-center text-sm font-semibold text-wkms-green">
+            <div className="rounded-[10px] bg-green-50 px-4 py-3 text-center text-sm font-semibold text-wkms-green">
               ✓ Task Completed
             </div>
           )}

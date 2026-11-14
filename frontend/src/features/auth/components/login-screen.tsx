@@ -46,7 +46,7 @@ export function LoginScreen() {
     <main className="flex min-h-dvh items-center justify-center bg-wkms-page p-6">
       <section
         aria-labelledby="worker-sign-in-title"
-        className="w-full max-w-[420px] rounded-xl border border-wkms-border bg-wkms-white p-6 sm:p-8"
+        className="w-full max-w-[420px] rounded-[10px] border border-wkms-border bg-wkms-white p-6 sm:p-8"
       >
         <p className="text-xs font-medium tracking-[0.16em] text-wkms-gold">
           FOREVER CITY HOTEL

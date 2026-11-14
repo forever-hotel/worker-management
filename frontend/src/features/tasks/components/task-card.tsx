@@ -56,12 +56,12 @@ export function TaskCard({
         }
       }}
       className={[
-        "cursor-pointer rounded-xl border bg-white p-3 shadow-sm transition hover:shadow-md sm:p-4",
-        isEscalated ? "border-amber-400 bg-amber-50/60" : "border-slate-200",
+        "cursor-pointer rounded-[10px] border bg-white p-3 shadow-none transition hover:border-[#1a3c5e] sm:p-4",
+        isEscalated ? "border-[#c9920d] bg-[#fff8e6]/60" : "border-[#ddd8cf]",
       ].join(" ")}
     >
       <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-medium text-slate-600">{task.id}</span>
+        <span className="text-xs font-medium text-[#5a5650]">{task.id}</span>
 
         {isEscalated ? (
           <Tag color="warning" className="m-0 text-xs font-medium">
@@ -87,17 +87,17 @@ export function TaskCard({
               Room {task.roomNumber}
             </span>
 
-            <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-600">
+            <span className="rounded-md border border-[#ddd8cf] bg-[#f9f7f4] px-2 py-1 text-xs text-[#5a5650]">
               {categoryLabels[task.category]}
             </span>
           </div>
 
-          <p className="mt-2 text-sm leading-5 text-slate-700">
+          <p className="mt-2 text-sm leading-5 text-[#1a1a18]">
             {task.description}
           </p>
         </div>
 
-        <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-slate-100 sm:h-14 sm:w-14">
+        <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-[#e8eef4] sm:h-14 sm:w-14">
           <Image
             src={imageSrc}
             alt={`${categoryLabels[task.category]} for Room ${task.roomNumber}`}
@@ -115,7 +115,7 @@ export function TaskCard({
       )}
 
       <div className="mt-3 flex items-center justify-between gap-3">
-        <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-500">
+        <span className="rounded-lg border border-[#ddd8cf] bg-[#f9f7f4] px-2 py-0.5 text-xs text-[#5a5650]">
           {task.elapsedMinutes} min ago
         </span>
 
