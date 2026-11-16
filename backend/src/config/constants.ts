@@ -1,0 +1,4 @@
+export const ENV_KEYS = {
+  DATABASE_URL: 'DATABASE_URL',
+  AUTH_SERVICE_URL: 'AUTH_SERVICE_URL',
+} as const;

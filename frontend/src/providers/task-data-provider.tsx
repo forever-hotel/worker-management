@@ -1,0 +1,340 @@
+"use client";
+
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useRouter } from "next/navigation";
+
+import { getMyTasks, getTaskQueue, getTaskCapacity } from "@/features/tasks/api/tasks.api";
+
+import type { TaskApiRecord } from "@/features/tasks/types/task-api";
+
+import { ApiError } from "@/lib/api-client";
+import {connectTaskSocket, TASK_SOCKET_EVENTS} from "@/lib/task-socket";
+import {loadOfflineTasks, saveOfflineTasks} from "@/features/offline/offline-task-storage";
+import {getAuthSession} from "@/lib/auth-session";
+import {reconcilePendingTaskUpdates} from "@/features/offline/offline-task-reconciliation";
+
+type TaskDataContextValue = {
+  queue: TaskApiRecord[];
+  myTasks: TaskApiRecord[];
+  queueCount: number;
+  myTasksCount: number;
+  loading: boolean;
+  error: string | null;
+  refreshAll: () => Promise<void>;
+  refreshQueue: () => Promise<void>;
+  refreshMyTasks: () => Promise<void>;
+  offline: boolean;
+  maxActiveTasks?: number | null;
+};
+
+const TaskDataContext = createContext<TaskDataContextValue | null>(null);
+
+type TaskDataProviderProps = {
+  children: ReactNode;
+};
+
+export function TaskDataProvider({ children }: TaskDataProviderProps) {
+  const router = useRouter();
+
+  const [queue, setQueue] = useState<TaskApiRecord[]>([]);
+
+  const [myTasks, setMyTasks] = useState<TaskApiRecord[]>([]);
+
+  const [loading, setLoading] = useState(true);
+
+  const [error, setError] = useState<string | null>(null);
+
+  const mountedRef = useRef(true);
+
+  const initialLoadStartedRef = useRef(false);
+
+  const [offline, setOffline] = useState(false);
+
+  // Null indicates an unverified server capacity; do not permit claims then.
+  const [maxActiveTasks, setMaxActiveTasks] = useState<number | null>(null);
+
+  const requestInFlightRef = useRef<Promise<void> | null>(null);
+
+  const refreshCapacity = useCallback(async () => {
+    try {
+      const capacity = await getTaskCapacity();
+      if (mountedRef.current) setMaxActiveTasks(capacity.maxActiveTasks);
+    } catch {
+      // Never invent a safe capacity when the authoritative lookup fails.
+      if (mountedRef.current) setMaxActiveTasks(null);
+    }
+  }, []);
+
+  const refreshQueue = useCallback(async () => {
+    const result = await getTaskQueue();
+
+    if (mountedRef.current) {
+      setQueue(result);
+      setError(null);
+    }
+  }, []);
+
+  const refreshMyTasks = useCallback(async () => {
+    const session = getAuthSession();
+
+    try {
+      const result = await getMyTasks();
+
+      if (mountedRef.current) {
+        setMyTasks(result);
+        setError(null);
+        setOffline(false);
+        await refreshCapacity();
+
+        if (session && getAuthSession()?.worker.worker_id === session.worker.worker_id) {
+          const workerId = session.worker.worker_id;
+
+          saveOfflineTasks(workerId, result);
+
+          reconcilePendingTaskUpdates(workerId, result);
+          window.dispatchEvent(
+              new Event("wkms:pending-updates-changed"),
+          );
+        }
+      }
+    } catch (requestError) {
+      if (requestError instanceof ApiError && requestError.status === 401) {
+        throw requestError;
+      }
+
+      if (session && mountedRef.current) {
+        const cached = loadOfflineTasks(session.worker.worker_id);
+
+        if (cached) {
+          setMyTasks(cached);
+          setOffline(true);
+          setError(null);
+          return;
+        }
+      }
+
+      throw requestError;
+    }
+  }, [refreshCapacity]);
+
+  const refreshAll = useCallback(async () => {
+    if (requestInFlightRef.current) {
+      return requestInFlightRef.current;
+    }
+
+    const request = (async () => {
+      try {
+        setError(null);
+
+        const [queueResult, myTasksResult] = await Promise.all([
+          getTaskQueue(),
+          getMyTasks(),
+        ]);
+
+        if (!mountedRef.current) {
+          return;
+        }
+
+        setQueue(queueResult);
+        setMyTasks(myTasksResult);
+        setOffline(false);
+        await refreshCapacity();
+
+        const session = getAuthSession();
+
+        if (session) {
+          const workerId = session.worker.worker_id;
+
+          saveOfflineTasks(workerId, myTasksResult);
+
+          reconcilePendingTaskUpdates(workerId, myTasksResult);
+          window.dispatchEvent(
+              new Event("wkms:pending-updates-changed"),
+          );
+        }
+      } catch (requestError) {
+        if (!mountedRef.current) {
+          return;
+        }
+
+        if (requestError instanceof ApiError && requestError.status === 401) {
+          router.replace("/login");
+
+          return;
+        }
+        const session = getAuthSession();
+
+        if (session) {
+          const cached = loadOfflineTasks(session.worker.worker_id);
+
+          if (cached) {
+            setMyTasks(cached);
+            setQueue([]);
+            setOffline(true);
+            setError(null);
+            return;
+          }
+        }
+
+        setError("Unable to refresh task data.");
+
+        throw requestError;
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false);
+        }
+
+        requestInFlightRef.current = null;
+      }
+    })();
+
+    requestInFlightRef.current = request;
+
+    return request;
+  }, [router, refreshCapacity]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    if (!initialLoadStartedRef.current) {
+      initialLoadStartedRef.current = true;
+
+      void refreshAll().catch(() => undefined);
+    }
+
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [refreshAll]);
+
+  /*
+   * DDP-80 fallback refresh:
+   * when the worker returns to the WKMS browser tab,
+   * refresh the shared data once.
+   *
+   * Shared Socket.IO invalidations also refresh these snapshots.
+   */
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void refreshAll().catch(() => undefined);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [refreshAll]);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      void refreshAll().catch(() => undefined);
+    };
+
+    window.addEventListener("online", handleOnline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+    };
+  }, [refreshAll]);
+
+  // Shared WebSocket updates arrive through the API Gateway.
+  useEffect(() => {
+    const socket = connectTaskSocket();
+
+    if (!socket) {
+      return;
+    }
+
+    const refreshTasks = () => {
+      void refreshAll().catch(() => undefined);
+    };
+
+    const handleAuthError = (error: Error) => {
+      if (/SESSION_EXPIRED/.test(error.message)) {
+        socket.disconnect();
+        router.replace("/login");
+      }
+    };
+
+    // Re-fetch after reconnecting to recover missed events.
+    socket.on("connect", refreshTasks);
+    const handleTransport = (status: { healthy?: boolean }) => {
+      if (status?.healthy === true) refreshTasks();
+    };
+    socket.on("realtime.status", handleTransport);
+    const resync = setInterval(() => {
+      if (document.visibilityState === "visible") refreshTasks();
+    }, 30000);
+
+    for (const eventName of TASK_SOCKET_EVENTS) {
+      socket.on(eventName, refreshTasks);
+    }
+
+    socket.on("connect_error", handleAuthError);
+
+    socket.connect();
+
+    return () => {
+      clearInterval(resync);
+      socket.off("realtime.status", handleTransport);
+      socket.off("connect", refreshTasks);
+
+      for (const eventName of TASK_SOCKET_EVENTS) {
+        socket.off(eventName, refreshTasks);
+      }
+
+      socket.off("connect_error", handleAuthError);
+      socket.disconnect();
+    };
+  }, [refreshAll, router]);
+
+  const value = useMemo<TaskDataContextValue>(
+    () => ({
+      queue,
+      myTasks,
+
+      queueCount: queue.length,
+
+      myTasksCount: myTasks.filter(
+        (task) => task.status === "ASSIGNED" || task.status === "IN_PROGRESS",
+      ).length,
+
+      loading,
+      error,
+      offline,
+      maxActiveTasks,
+      refreshAll,
+      refreshQueue,
+      refreshMyTasks,
+    }),
+    [queue, myTasks, loading, error, offline, maxActiveTasks, refreshAll, refreshQueue, refreshMyTasks],
+  );
+
+  return (
+    <TaskDataContext.Provider value={value}>
+      {children}
+    </TaskDataContext.Provider>
+  );
+}
+
+export function useTaskData() {
+  const context = useContext(TaskDataContext);
+
+  if (!context) {
+    throw new Error("useTaskData must be used inside TaskDataProvider");
+  }
+
+  return context;
+}
